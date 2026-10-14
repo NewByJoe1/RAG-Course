@@ -9,6 +9,11 @@ import {
   type EvalResults,
 } from "@/supabase/functions/_shared/capstone";
 
+/** The capstone is module m12 (see public.capstone_module_id()); its page is /capstone. */
+export const CAPSTONE_MODULE_ID = "m12";
+export const CAPSTONE_SLUG = "capstone";
+export const CAPSTONE_PATH = "/capstone";
+
 export type CheckRecord = {
   check_key: string;
   ci_status: CiStatus | null;

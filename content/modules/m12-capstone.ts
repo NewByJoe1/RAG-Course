@@ -1,8 +1,8 @@
 import type { ModuleContent } from "../types";
 
 // The capstone has no lessons or quiz: it's assessed from the learner's repo
-// CI (see /capstone). The row exists so progress.mastered_at has a module to
-// point at. Unpublished, so it isn't listed or part of module gating.
+// CI on /capstone (the module page redirects there). Published, so it's listed
+// and unlocks after Module 11; progress.mastered_at records the pass.
 const m12: ModuleContent = {
   id: "m12",
   slug: "capstone",
@@ -17,7 +17,7 @@ const m12: ModuleContent = {
     "Defend your design choices to a reviewer",
   ],
   estimated_minutes: 0,
-  is_published: false,
+  is_published: true,
   lesson_steps: [],
   quiz_items: [],
   failure_cases: [],

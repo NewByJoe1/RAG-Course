@@ -79,3 +79,25 @@ describe("decideAccess", () => {
     });
   });
 });
+
+describe("capstone gating", () => {
+  it("gates /capstone by the capstone module's slug", () => {
+    expect(moduleSlugFromPath("/capstone")).toBe("capstone");
+    expect(moduleSlugFromPath("/capstone/anything")).toBe("capstone");
+    expect(moduleSlugFromPath("/capstones")).toBeNull();
+  });
+
+  it("sends a learner who hasn't passed Module 11 back to it", () => {
+    const gate = { module_id: "m12", slug: "capstone", unlocked: false, prev_slug: "legal-embeddings" };
+    expect(decideAccess({ pathname: "/capstone", signedIn: true, gate })).toEqual({
+      action: "redirect",
+      to: "/modules/legal-embeddings?locked=capstone",
+    });
+    expect(decideAccess({ pathname: "/capstone", signedIn: true, gate: { ...gate, unlocked: true } })).toEqual({ action: "next" });
+  });
+
+  it("still requires sign-in", () => {
+    expect(decideAccess({ pathname: "/capstone", signedIn: false })).toEqual({ action: "redirect", to: "/login?next=%2Fcapstone" });
+  });
+});
+

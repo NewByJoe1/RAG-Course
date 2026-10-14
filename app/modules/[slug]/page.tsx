@@ -1,4 +1,5 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { CAPSTONE_PATH, CAPSTONE_SLUG } from "@/lib/capstone/view";
 import { createClient } from "@/lib/supabase/server";
 import { QuizForm, type QuizFormItem } from "@/components/quiz/QuizForm";
 import { formatPercent } from "@/lib/course/quiz";
@@ -12,6 +13,9 @@ export default async function ModulePage({
   params: { slug: string };
   searchParams: { locked?: string };
 }) {
+  // The capstone has no lessons or quiz; it lives on its own page.
+  if (params.slug === CAPSTONE_SLUG) redirect(CAPSTONE_PATH);
+
   const supabase = createClient();
 
   const { data: mod } = await supabase

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { modules } from "@/content";
 import { moduleSchema, TODO_MARKER, type ModuleContent } from "@/content/types";
+import { THRESHOLDS } from "@/supabase/functions/_shared/capstone";
 
 const parse = (m: ModuleContent) => moduleSchema.safeParse(m);
 
@@ -56,7 +57,7 @@ describe("course content", () => {
 
   it("keeps module order contiguous for the published course", () => {
     const published = modules.filter((m) => m.is_published).map((m) => m.order_index);
-    expect(published).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+    expect(published).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
   });
 
   describe("failure cause options", () => {
@@ -113,4 +114,16 @@ describe("course content", () => {
     });
 
   });
+
+  it("publishes the capstone (m12) as the last module, graded by CI rather than a quiz", () => {
+    const m12 = modules.find((m) => m.id === "m12")!;
+    expect(m12).toMatchObject({ is_published: true, order_index: 12, slug: "capstone" });
+    expect([m12.lesson_steps.length, m12.quiz_items.length, m12.failure_cases.length]).toEqual([0, 0, 0]);
+    // Its objectives state the same thresholds the grader uses.
+    const text = m12.learning_objectives.join(" ");
+    expect(text).toContain(`recall@3 ≥ ${THRESHOLDS.recall_at_3}`);
+    expect(text).toContain(`citation accuracy ≥ ${THRESHOLDS.citation_accuracy}`);
+    expect(text).toContain(`${THRESHOLDS.concurrent_users_tested}+ concurrent users`);
+  });
 });
+

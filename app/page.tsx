@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { computeModuleLocks } from "@/lib/course/gating";
 import { formatPercent } from "@/lib/course/quiz";
+import { CAPSTONE_MODULE_ID, CAPSTONE_PATH } from "@/lib/capstone/view";
 
 export default async function Home({ searchParams }: { searchParams: { locked?: string; gate_error?: string } }) {
   const supabase = createClient();
@@ -15,7 +16,7 @@ export default async function Home({ searchParams }: { searchParams: { locked?: 
     .order("order_index");
 
   const { data: progress } = user
-    ? await supabase.from("progress").select("module_id, best_score, passed_at")
+    ? await supabase.from("progress").select("module_id, best_score, passed_at, mastered_at")
     : { data: [] };
 
   const passed = (progress ?? []).filter((p) => p.passed_at).map((p) => p.module_id);
@@ -54,13 +55,21 @@ export default async function Home({ searchParams }: { searchParams: { locked?: 
                   {locked ? (
                     <span className="text-neutral-500">🔒 {m.order_index}. {m.title}</span>
                   ) : (
-                    <Link href={`/modules/${m.slug}`} className="underline-offset-4 hover:underline">
+                    <Link href={m.id === CAPSTONE_MODULE_ID ? CAPSTONE_PATH : `/modules/${m.slug}`} className="underline-offset-4 hover:underline">
                       {m.order_index}. {m.title}
                     </Link>
                   )}
                 </h2>
                 <span className="text-sm text-neutral-500">
-                  {p?.passed_at ? `Passed · best ${formatPercent(p.best_score)}` : p?.best_score != null ? `Best ${formatPercent(p.best_score)}` : `${m.estimated_minutes} min`}
+                  {m.id === CAPSTONE_MODULE_ID
+                    ? p?.mastered_at
+                      ? "Capstone passed"
+                      : "Capstone · graded by CI"
+                    : p?.passed_at
+                      ? `Passed · best ${formatPercent(p.best_score)}`
+                      : p?.best_score != null
+                        ? `Best ${formatPercent(p.best_score)}`
+                        : `${m.estimated_minutes} min`}
                 </span>
               </div>
               <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">{m.summary}</p>

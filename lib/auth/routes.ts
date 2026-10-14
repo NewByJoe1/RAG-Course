@@ -16,8 +16,12 @@ export function isAuthPage(pathname: string): boolean {
   return AUTH_PAGES.some((p) => matches(pathname, p));
 }
 
-/** Slug for /modules/<slug>[/...], otherwise null. */
+/**
+ * Module slug a path is gated by: /modules/<slug>[/...], plus /capstone,
+ * which is the capstone module's (m12) page. Otherwise null.
+ */
 export function moduleSlugFromPath(pathname: string): string | null {
+  if (pathname === "/capstone" || pathname.startsWith("/capstone/")) return "capstone";
   const m = /^\/modules\/([a-z0-9-]+)(?:\/.*)?$/.exec(pathname);
   return m ? m[1] : null;
 }

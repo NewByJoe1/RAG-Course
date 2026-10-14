@@ -152,3 +152,25 @@ describe("changing repos", () => {
     expect((await q(`select 1 from public.capstone_checks where user_id = $1`, [ALICE])).rows).toHaveLength(1);
   });
 });
+
+describe("capstone unlocks after Module 11", () => {
+  const CAROL = "00000000-0000-0000-0000-00000000ca09";
+  const gate = () =>
+    t.as("authenticated", CAROL, () =>
+      q<{ module_id: string; unlocked: boolean; prev_slug: string }>(`select module_id, unlocked, prev_slug from public.module_gate('capstone')`),
+    );
+
+  it("is published as m12 and locked until Module 11 is passed", async () => {
+    await t.createUser(CAROL, "carol@example.com");
+    expect((await gate()).rows).toEqual([{ module_id: "m12", unlocked: false, prev_slug: "legal-embeddings" }]);
+    // Passing earlier modules isn't enough.
+    await q(`insert into public.progress (user_id, module_id, status, passed_at) values ($1, 'm10', 'completed', now())`, [CAROL]);
+    expect((await gate()).rows[0].unlocked).toBe(false);
+  });
+
+  it("unlocks once Module 11 is passed", async () => {
+    await q(`insert into public.progress (user_id, module_id, status, passed_at) values ($1, 'm11', 'completed', now())`, [CAROL]);
+    expect((await gate()).rows[0].unlocked).toBe(true);
+  });
+});
+
