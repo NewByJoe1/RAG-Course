@@ -31,9 +31,11 @@ const migrationFiles = () =>
 /**
  * Fresh database with content/ seeded. By default every migration is applied;
  * pass `upTo` (e.g. "0002") to stop there and apply the rest later with
- * `migrateRest()`, to test data migrations against existing rows.
+ * `migrateRest()`, to test data migrations against existing rows. Pass
+ * `modules` to seed only those content modules (e.g. the ones that existed
+ * when an old migration ran).
  */
-export async function createTestDb(opts: { upTo?: string } = {}) {
+export async function createTestDb(opts: { upTo?: string; modules?: string[] } = {}) {
   const db = new PGlite();
   await db.exec(SUPABASE_STUB);
   const files = migrationFiles();
@@ -59,7 +61,7 @@ export async function createTestDb(opts: { upTo?: string } = {}) {
   const seed = (table: string, row: Record<string, unknown>) => insert(db, table, existing ? existing(table, row) : row);
 
   // Seed real course content as the superuser (like scripts/seed.ts with the service role).
-  for (const m of modules) {
+  for (const m of modules.filter((x) => !opts.modules || opts.modules.includes(x.id))) {
     const { lesson_steps, quiz_items, failure_cases, ...row } = m;
     await seed("modules", row);
     for (const s of lesson_steps) await seed("lesson_steps", { code_snippet: null, code_language: null, ...s, module_id: m.id });

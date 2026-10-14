@@ -46,7 +46,7 @@ describe("course content", () => {
     expect(m02.quiz_items.map((q) => q.kind)).toEqual(m01.quiz_items.map((q, i) => (i === 5 ? "single_choice" : q.kind)));
   });
 
-  it.each(["m03", "m04", "m05"])("publishes %s with the same 7 / 7 / 3 structure", (id) => {
+  it.each(["m03", "m04", "m05", "m06", "m07", "m08"])("publishes %s with the same 7 / 7 / 3 structure", (id) => {
     const m = modules.find((x) => x.id === id)!;
     expect(m.is_published).toBe(true);
     expect([m.lesson_steps.length, m.quiz_items.length, m.failure_cases.length]).toEqual([7, 7, 3]);
@@ -56,7 +56,7 @@ describe("course content", () => {
 
   it("keeps module order contiguous for the published course", () => {
     const published = modules.filter((m) => m.is_published).map((m) => m.order_index);
-    expect(published).toEqual([1, 2, 3, 4, 5]);
+    expect(published).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
   });
 
   describe("failure cause options", () => {

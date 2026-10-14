@@ -82,6 +82,7 @@ describe("failure-case review card with cause options", () => {
   it("asks for the cause instead of a plain Show answer, then reveals", async () => {
     const user = userEvent.setup();
     render(<ReviewSession cards={[card]} remainingAfter={0} />);
+    expect(screen.queryByText("Retrieved context")).toBeNull(); // no passages, no empty heading
     expect(screen.queryByRole("button", { name: "Show answer" })).toBeNull();
     expect(screen.queryByText(ROOT)).toBeNull();
     expect(screen.queryByRole("button", { name: /^Good/ })).toBeNull();

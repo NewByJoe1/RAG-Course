@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { createTestDb, type TestDb } from "./pglite";
+import { modules } from "@/content";
 
 let t: TestDb;
 beforeAll(async () => {
@@ -20,7 +21,7 @@ describe("0006 failure cause options", () => {
         `select id, jsonb_array_length(cause_options) as n, correct_cause from public.failure_cases where cause_options is not null order by id`,
       ),
     );
-    expect(rows).toHaveLength(15);
+    expect(rows).toHaveLength(modules.flatMap((m) => m.failure_cases).length);
     expect(rows.every((r) => r.n === 3)).toBe(true);
     expect(rows.find((r) => r.id === "m03-f02")?.correct_cause).toBe("b");
   });
@@ -44,3 +45,20 @@ describe("0006 failure cause options", () => {
     await setOptions(null, null);
   });
 });
+
+describe("0007 failure categories", () => {
+  it("files Modules 6–8 under evaluation and monitoring", async () => {
+    const { rows } = await t.db.query<{ category: string; n: number }>(
+      `select category, count(*)::int as n from public.failure_cases where category in ('evaluation', 'monitoring') group by 1 order by 1`,
+    );
+    expect(rows).toEqual([
+      { category: "evaluation", n: 5 },
+      { category: "monitoring", n: 3 },
+    ]);
+  });
+
+  it("still rejects unknown categories", async () => {
+    await expect(t.db.query(`update public.failure_cases set category = 'vibes' where id = 'm01-f01'`)).rejects.toThrow(/failure_cases_category_check/);
+  });
+});
+

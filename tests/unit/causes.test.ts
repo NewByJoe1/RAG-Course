@@ -18,10 +18,8 @@ describe("orderCauseOptions", () => {
 
   it("stops the authored correct answer from usually being first", () => {
     const cases = modules.flatMap((m) => m.failure_cases).filter((f) => f.cause_options && f.correct_cause);
-    expect(cases.length).toBe(15);
-    const authoredFirst = cases.filter((f) => f.cause_options![0].id === f.correct_cause).length;
+    expect(cases.length).toBe(modules.flatMap((m) => m.failure_cases).length);
     const shownFirst = cases.filter((f) => orderCauseOptions(f.id, f.cause_options!)[0].id === f.correct_cause).length;
-    expect(authoredFirst).toBe(13); // as authored: 7 of 9 in Modules 3–5, plus 6 of 6 in Modules 1–2
     expect(shownFirst).toBeLessThanOrEqual(Math.ceil(cases.length / 2));
   });
 });

@@ -13,6 +13,8 @@ const CATEGORIES = {
   hallucination: "Hallucination",
   stale_index: "Stale index",
   prompt: "Prompt",
+  evaluation: "Evaluation",
+  monitoring: "Monitoring",
 } as const;
 type Category = keyof typeof CATEGORIES;
 
@@ -73,20 +75,22 @@ export default async function FailureGallery({ searchParams }: { searchParams: {
                     <dt className="font-medium">User query</dt>
                     <dd className="mt-1 rounded bg-neutral-100 p-2 font-mono dark:bg-neutral-900">{c.user_query}</dd>
                   </div>
+                  {(c.retrieved_context as ContextChunk[]).length > 0 && (
                   <div>
-                    <dt className="font-medium">Retrieved context</dt>
-                    <dd className="mt-1 space-y-2">
-                      {(c.retrieved_context as ContextChunk[]).map((r, i) => (
-                        <div key={i} className="rounded border border-neutral-200 p-2 dark:border-neutral-800">
-                          <p className="text-xs text-neutral-500">
-                            [{i + 1}] {r.source}
-                            {r.score != null && ` · score ${r.score.toFixed(2)}`}
-                          </p>
-                          <p>{r.text}</p>
-                        </div>
-                      ))}
-                    </dd>
-                  </div>
+                      <dt className="font-medium">Retrieved context</dt>
+                      <dd className="mt-1 space-y-2">
+                        {(c.retrieved_context as ContextChunk[]).map((r, i) => (
+                          <div key={i} className="rounded border border-neutral-200 p-2 dark:border-neutral-800">
+                            <p className="text-xs text-neutral-500">
+                              [{i + 1}] {r.source}
+                              {r.score != null && ` · score ${r.score.toFixed(2)}`}
+                            </p>
+                            <p>{r.text}</p>
+                          </div>
+                        ))}
+                      </dd>
+                    </div>
+                  )}
                   <div>
                     <dt className="font-medium">Broken output</dt>
                     <dd className="mt-1 rounded bg-red-50 p-2 dark:bg-red-950">{c.bad_output}</dd>

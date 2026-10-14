@@ -227,17 +227,19 @@ function FailureCard({ card, onRated }: { card: Extract<SessionCard, { type: "fa
           <dt className="font-medium">User query</dt>
           <dd className="mt-1 rounded bg-neutral-100 p-2 font-mono dark:bg-neutral-900">{card.user_query}</dd>
         </div>
+        {card.retrieved_context.length > 0 && (
         <div>
-          <dt className="font-medium">Retrieved context</dt>
-          <dd className="mt-1 space-y-2">
-            {card.retrieved_context.map((r, i) => (
-              <p key={i} className="rounded border border-neutral-200 p-2 dark:border-neutral-800">
-                <span className="block text-xs text-neutral-500">[{i + 1}] {r.source}</span>
-                {r.text}
-              </p>
-            ))}
-          </dd>
-        </div>
+            <dt className="font-medium">Retrieved context</dt>
+            <dd className="mt-1 space-y-2">
+              {card.retrieved_context.map((r, i) => (
+                <p key={i} className="rounded border border-neutral-200 p-2 dark:border-neutral-800">
+                  <span className="block text-xs text-neutral-500">[{i + 1}] {r.source}</span>
+                  {r.text}
+                </p>
+              ))}
+            </dd>
+          </div>
+        )}
         <div>
           <dt className="font-medium">Broken output</dt>
           <dd className="mt-1 rounded bg-red-50 p-2 dark:bg-red-950">{card.bad_output}</dd>

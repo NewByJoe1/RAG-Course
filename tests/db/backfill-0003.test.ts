@@ -25,7 +25,8 @@ function answers(nCorrect: number) {
 let t: TestDb;
 
 beforeAll(async () => {
-  t = await createTestDb({ upTo: "0002" });
+  // Live, 0003 ran when only Module 1 existed.
+  t = await createTestDb({ upTo: "0002", modules: ["m01"] });
   await t.createUser(PASSED, "passed@example.com");
   await t.createUser(FAILED, "failed@example.com");
 
