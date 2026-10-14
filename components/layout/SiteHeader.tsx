@@ -16,6 +16,7 @@ export async function SiteHeader() {
         <Link href="/streak">Streak</Link>
         <Link href="/mastery">Mastery</Link>
         <Link href="/failures">Failure gallery</Link>
+        <Link href="/capstone">Capstone</Link>
         <span className="ml-auto flex items-center gap-3">
           {user ? (
             <>

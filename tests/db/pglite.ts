@@ -21,7 +21,12 @@ const SUPABASE_STUB = `
 
 export type TestDb = Awaited<ReturnType<typeof createTestDb>>;
 
-const migrationFiles = () => readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith(".sql")).sort();
+// Migrations marked "-- pglite: skip" need Supabase-only extensions (pg_cron, pg_net, Vault).
+const migrationFiles = () =>
+  readdirSync(MIGRATIONS_DIR)
+    .filter((f) => f.endsWith(".sql"))
+    .filter((f) => !/^-- pglite: skip/m.test(readFileSync(path.join(MIGRATIONS_DIR, f), "utf8")))
+    .sort();
 
 /**
  * Fresh database with content/ seeded. By default every migration is applied;

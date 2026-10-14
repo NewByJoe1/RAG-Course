@@ -1,0 +1,49 @@
+# Capstone eval. Runs on every push (all branches) and nightly on the default
+# branch. Writes eval/results.json and uploads it as the "eval-results"
+# artifact, which the course polls every 15 minutes.
+#
+# Don't rename this file, the artifact, or results.json: the course looks
+# for exactly these names.
+name: eval
+
+on:
+  push:
+  schedule:
+    - cron: "17 3 * * *" # nightly, 03:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read # write-results.mjs counts this workflow's nightly runs
+
+concurrency:
+  group: eval-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Your pipeline goes here. eval/run.sh must write eval/metrics.json.
+      - name: Run evaluation
+        run: bash eval/run.sh
+
+      - name: Write eval/results.json
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node eval/write-results.mjs
+
+      - name: Upload eval-results
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results
+          path: eval/results.json
+          if-no-files-found: error
+          retention-days: 30

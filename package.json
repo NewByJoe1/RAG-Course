@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "build:check": "NEXT_DIST_DIR=.next-verify next build"
+    "build:check": "NEXT_DIST_DIR=.next-verify next build",
+    "typecheck:functions": "deno check --config supabase/functions/poll-ci/deno.json supabase/functions/poll-ci/index.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
@@ -33,6 +34,7 @@
     "dotenv": "^18.0.7",
     "eslint": "^8",
     "eslint-config-next": "14.2.35",
+    "fflate": "^0.8.3",
     "jsdom": "^30.1.2",
     "postcss": "^8",
     "supabase": "^2.120.0",
