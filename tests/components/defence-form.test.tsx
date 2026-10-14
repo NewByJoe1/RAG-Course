@@ -23,15 +23,70 @@ beforeEach(() => recordDefence.mockReset());
 afterEach(cleanup);
 
 describe("DefenceForm", () => {
-  it("shows six question slots and the closing question, and can't be saved until complete", async () => {
-    const user = userEvent.setup();
+  it("shows six question slots and the closing question", () => {
     render(<DefenceForm learnerId={LEARNER} learnerName="Ana" />);
     expect(screen.getAllByRole("textbox", { name: /^Question \d$/ })).toHaveLength(6);
     expect(screen.getByText(/What would make this answer wrong, and how would you know\?/)).toBeInTheDocument();
+  });
+
+  // Regression: the old form disabled "Record defence" until complete and gave
+  // no reason, so a form that looked filled in could leave it dead with no clue.
+  it("never disables Record defence while idle, and names every missing field when clicked too early", async () => {
+    const user = userEvent.setup();
+    render(<DefenceForm learnerId={LEARNER} learnerName="Ana" />);
     const save = screen.getByRole("button", { name: "Record defence" });
-    expect(save).toBeDisabled();
-    await fillAll(user);
     expect(save).toBeEnabled();
+
+    await user.click(save);
+    expect(recordDefence).not.toHaveBeenCalled();
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("Can't record yet. Missing:");
+    for (let i = 1; i <= 6; i++) {
+      expect(alert).toHaveTextContent(`Question ${i} text`);
+      expect(alert).toHaveTextContent(`Question ${i} pass/fail`);
+    }
+    expect(alert).toHaveTextContent("Closing question pass/fail");
+  });
+
+  it("narrows the missing list as fields are filled, down to the one that's left", async () => {
+    const user = userEvent.setup();
+    render(<DefenceForm learnerId={LEARNER} learnerName="Ana" />);
+    await fillAll(user);
+    // Undo one field: clear Question 4's text.
+    await user.clear(screen.getByRole("textbox", { name: "Question 4" }));
+    expect(screen.getByRole("status")).toHaveTextContent("Still needed: Question 4 text.");
+    await user.click(screen.getByRole("button", { name: "Record defence" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Can't record yet. Missing: Question 4 text.");
+    expect(recordDefence).not.toHaveBeenCalled();
+  });
+
+  it("a fully filled form enables the button and records the defence", async () => {
+    recordDefence.mockResolvedValue({ status: "saved", passed: true, metCount: 1, allMet: false, recordedAt: "2026-10-15T10:00:00Z" });
+    const user = userEvent.setup();
+    render(<DefenceForm learnerId={LEARNER} learnerName="Ana" />);
+    await fillAll(user);
+    const save = screen.getByRole("button", { name: "Record defence" });
+    expect(save).toBeEnabled();
+    expect(screen.queryByRole("alert")).toBeNull();
+    await user.click(save);
+    expect(recordDefence).toHaveBeenCalledTimes(1);
+    expect(recordDefence.mock.calls[0][1].questions.map((q: { passed: boolean }) => q.passed)).toEqual([true, true, true, true, true, true]);
+    expect(await screen.findByText(/Saved for Ana: defence passed\. Now 1\/6 on main\./)).toBeInTheDocument();
+  });
+
+  it("disables the button only while saving", async () => {
+    let finish: (v: unknown) => void = () => {};
+    recordDefence.mockReturnValue(new Promise((r) => (finish = r)));
+    const user = userEvent.setup();
+    render(<DefenceForm learnerId={LEARNER} learnerName="Ana" />);
+    await fillAll(user);
+    await user.click(screen.getByRole("button", { name: "Record defence" }));
+    const saving = screen.getByRole("button", { name: "Saving…" });
+    expect(saving).toBeDisabled();
+    await user.click(saving);
+    expect(recordDefence).toHaveBeenCalledTimes(1); // no double submit
+    finish({ status: "saved", passed: true, metCount: 1, allMet: false, recordedAt: "2026-10-15T10:00:00Z" });
+    expect(await screen.findByRole("button", { name: "Record defence" })).toBeEnabled();
   });
 
   it("previews a pass only when every question passes with a verified citation and the closing question passes", async () => {

@@ -41,14 +41,28 @@ export function DefenceForm({ learnerId, learnerName }: { learnerId: string; lea
 
   const update = (i: number, patch: Partial<Slot>) => setSlots((s) => s.map((x, j) => (j === i ? { ...x, ...patch } : x)));
 
-  const complete = slots.every((s) => s.question.trim() && s.passed !== null) && closingPassed !== null;
+  const [triedSubmit, setTriedSubmit] = useState(false);
+
+  // What the form still needs, by name. Empty means it can be recorded.
+  const missing = [
+    ...slots.flatMap((s, i) => [
+      ...(s.question.trim() ? [] : [`Question ${i + 1} text`]),
+      ...(s.passed === null ? [`Question ${i + 1} pass/fail`] : []),
+    ]),
+    ...(closingPassed === null ? ["Closing question pass/fail"] : []),
+  ];
+  const complete = missing.length === 0;
   const verdict = complete
     ? defenceVerdict({ questions: slots.map((s) => ({ passed: s.passed!, citation_verified: s.citation_verified })), closing_passed: closingPassed! })
     : null;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!complete || pending) return;
+    if (pending) return;
+    if (!complete) {
+      setTriedSubmit(true);
+      return;
+    }
     setPending(true);
     setResult(null);
     try {
@@ -62,6 +76,7 @@ export function DefenceForm({ learnerId, learnerName }: { learnerId: string; lea
         setSlots(emptySlots());
         setClosingPassed(null);
         setClosingNote("");
+        setTriedSubmit(false);
       }
     } catch {
       setResult({ status: "error", error: "Couldn't reach the server. Reload the page and try again." });
@@ -128,7 +143,7 @@ export function DefenceForm({ learnerId, learnerName }: { learnerId: string; lea
 
       <p role="status" aria-live="polite" className="text-sm">
         {verdict === null ? (
-          <span className="text-neutral-500">Fill in all six questions and the closing question to see the outcome.</span>
+          <span className="text-neutral-500">Still needed: {missing.join(", ")}.</span>
         ) : verdict.passed ? (
           <span className="font-medium text-green-700 dark:text-green-300">Defence criterion will be met.</span>
         ) : (
@@ -136,6 +151,11 @@ export function DefenceForm({ learnerId, learnerName }: { learnerId: string; lea
         )}
       </p>
 
+      {triedSubmit && !complete && (
+        <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-950 dark:text-red-200">
+          Can&apos;t record yet. Missing: {missing.join("; ")}.
+        </p>
+      )}
       {result?.status === "error" && (
         <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-950 dark:text-red-200">
           {result.error}
@@ -148,7 +168,8 @@ export function DefenceForm({ learnerId, learnerName }: { learnerId: string; lea
         </p>
       )}
 
-      <button type="submit" disabled={!complete || pending} className={primary}>
+      {/* Only disabled while saving: a click on an incomplete form explains what's missing. */}
+      <button type="submit" disabled={pending} className={primary}>
         {pending ? "Saving…" : "Record defence"}
       </button>
     </form>
