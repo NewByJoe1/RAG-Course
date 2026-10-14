@@ -12,7 +12,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "build:check": "NEXT_DIST_DIR=.next-verify next build",
-    "typecheck:functions": "deno check --config supabase/functions/poll-ci/deno.json supabase/functions/poll-ci/index.ts"
+    "typecheck:functions": "deno check --config supabase/functions/poll-ci/deno.json supabase/functions/poll-ci/index.ts",
+    "test-learner:create": "tsx scripts/create-test-learner.ts",
+    "test-learner:delete": "tsx scripts/delete-test-learner.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
