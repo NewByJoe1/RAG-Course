@@ -54,12 +54,15 @@ beforeAll(async () => {
 
   // A second published module (5 questions, so 4/5 lands exactly on 80%)
   // and an unpublished one between them that gating must skip.
-  await insert(t.db, "modules", { id: "m02", slug: "draft", order_index: 2, title: "Draft", is_published: false });
-  await insert(t.db, "modules", { id: "m03", slug: "chunking", order_index: 3, title: "Chunking", is_published: true });
+  // Pin the published set so these tests don't change meaning as real
+  // modules (m02, …) get published: only m01 from content/ stays published.
+  await t.db.query(`update public.modules set is_published = false where id <> 'm01'`);
+  await insert(t.db, "modules", { id: "m90", slug: "draft", order_index: 90, title: "Draft", is_published: false });
+  await insert(t.db, "modules", { id: "m91", slug: "chunking", order_index: 91, title: "Chunking", is_published: true });
   for (let i = 1; i <= 5; i++) {
     await insert(t.db, "quiz_items", {
-      id: `m03-q0${i}`,
-      module_id: "m03",
+      id: `m91-q0${i}`,
+      module_id: "m91",
       order_index: i,
       kind: "single_choice",
       prompt: `Q${i}`,
@@ -98,7 +101,7 @@ describe("brand-new learner", () => {
 
     const m3 = await gate(NEW, "chunking");
     expect(m3).toEqual({ unlocked: false, prev_slug: "rag-foundations" });
-    expect(decideAccess({ pathname: "/modules/chunking", signedIn: true, gate: { module_id: "m03", slug: "chunking", ...m3 } })).toEqual({
+    expect(decideAccess({ pathname: "/modules/chunking", signedIn: true, gate: { module_id: "m91", slug: "chunking", ...m3 } })).toEqual({
       action: "redirect",
       to: "/modules/rag-foundations?locked=chunking",
     });
@@ -118,13 +121,13 @@ describe("brand-new learner", () => {
 });
 
 describe("80% pass gate", () => {
-  it("locks m03 until m01 is passed, skipping the unpublished module", async () => {
+  it("locks m91 until m01 is passed, skipping the unpublished module", async () => {
     expect(await gate(ALICE, "rag-foundations")).toEqual({ unlocked: true, prev_slug: null });
     expect(await gate(ALICE, "chunking")).toEqual({ unlocked: false, prev_slug: "rag-foundations" });
   });
 
   it("refuses quiz submissions for a locked module", async () => {
-    await expect(submit(ALICE, "m03", { "m03-q01": { choice: "a" } })).rejects.toThrow(/locked/);
+    await expect(submit(ALICE, "m91", { "m91-q01": { choice: "a" } })).rejects.toThrow(/locked/);
   });
 
   it("fails below 80% (5/7 = 71%) and keeps the module locked", async () => {
@@ -164,12 +167,12 @@ describe("80% pass gate", () => {
   });
 
   it("passes at exactly 80% (4/5)", async () => {
-    const r = await submit(ALICE, "m03", {
-      "m03-q01": { choice: "a" },
-      "m03-q02": { choice: "a" },
-      "m03-q03": { choice: "a" },
-      "m03-q04": { choice: "a" },
-      "m03-q05": { choice: "b" },
+    const r = await submit(ALICE, "m91", {
+      "m91-q01": { choice: "a" },
+      "m91-q02": { choice: "a" },
+      "m91-q03": { choice: "a" },
+      "m91-q04": { choice: "a" },
+      "m91-q05": { choice: "b" },
     });
     expect(r).toMatchObject({ correct: 4, total: 5, score: 0.8, passed: true });
   });
@@ -186,7 +189,7 @@ describe("attempt records", () => {
     const { rows } = await t.as("authenticated", ALICE, () =>
       t.db.query<{ n: number }>(`select count(*)::int as n from public.quiz_attempts`),
     );
-    // 7 + 5 + 7 + 7 for m01, 5 for m03
+    // 7 + 5 + 7 + 7 for m01, 5 for m91
     expect(rows[0].n).toBe(31);
   });
 
@@ -194,7 +197,7 @@ describe("attempt records", () => {
     const cards = await t.as("authenticated", ALICE, () =>
       t.db.query<{ n: number }>(`select count(*)::int as n from public.review_cards`),
     );
-    // m01: 7 quiz items + 3 failure cases; m03: 5 quiz items
+    // m01: 7 quiz items + 3 failure cases; m91: 5 quiz items
     expect(cards.rows[0].n).toBe(15);
   });
 });

@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+/** Marks unwritten content. Modules containing it can't be published. */
+export const TODO_MARKER = "[TODO]";
+
 // Schemas mirror supabase/migrations/0001_init.sql. Content uses stable text
 // ids (m01, m01-s01, m01-q01, m01-f01) so reseeding upserts in place.
 
@@ -105,6 +108,20 @@ export const moduleSchema = z
     check("lesson_step", m.lesson_steps);
     check("quiz_item", m.quiz_items);
     check("failure_case", m.failure_cases);
+    // Drafts can be seeded unpublished, but placeholders must never reach learners.
+    if (m.is_published) {
+      const todos: string[] = [];
+      const scan = (v: unknown, path: string) => {
+        if (typeof v === "string") {
+          if (v.includes(TODO_MARKER)) todos.push(path);
+        } else if (Array.isArray(v)) v.forEach((x, i) => scan(x, `${path}[${i}]`));
+        else if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) scan(x, path ? `${path}.${k}` : k);
+      };
+      scan(m, "");
+      if (todos.length) {
+        ctx.addIssue({ code: "custom", message: `${m.id} is published but still has ${TODO_MARKER} placeholders: ${todos.slice(0, 5).join(", ")}${todos.length > 5 ? ", …" : ""}` });
+      }
+    }
     for (const q of m.quiz_items) {
       if (q.lesson_step_id && !stepIds.has(q.lesson_step_id)) {
         ctx.addIssue({ code: "custom", message: `${q.id}: lesson_step_id ${q.lesson_step_id} not in module` });
