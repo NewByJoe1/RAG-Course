@@ -230,7 +230,7 @@ function FailureCard({ card, onRated }: { card: Extract<SessionCard, { type: "fa
           </dd>
         </div>
         <div>
-          <dt className="font-medium">Model output</dt>
+          <dt className="font-medium">Broken output</dt>
           <dd className="mt-1 rounded bg-red-50 p-2 dark:bg-red-950">{card.bad_output}</dd>
         </div>
       </dl>

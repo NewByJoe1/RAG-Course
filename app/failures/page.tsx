@@ -86,7 +86,7 @@ export default async function FailureGallery({ searchParams }: { searchParams: {
                     </dd>
                   </div>
                   <div>
-                    <dt className="font-medium">Model output</dt>
+                    <dt className="font-medium">Broken output</dt>
                     <dd className="mt-1 rounded bg-red-50 p-2 dark:bg-red-950">{c.bad_output}</dd>
                   </div>
                   <div>
