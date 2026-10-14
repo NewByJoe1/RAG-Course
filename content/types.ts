@@ -76,6 +76,18 @@ export const failureCaseSchema = z.object({
   symptom: z.string().min(1),
   root_cause: z.string().min(1),
   fix: z.string().min(1),
+  // Optional multiple-choice diagnosis, shown before root_cause and fix.
+  cause_options: z.array(choiceSchema).min(2).nullable().default(null),
+  correct_cause: z.string().nullable().default(null),
+}).superRefine((f, ctx) => {
+  if ((f.cause_options === null) !== (f.correct_cause === null)) {
+    ctx.addIssue({ code: "custom", message: `${f.id}: cause_options and correct_cause must be set together` });
+    return;
+  }
+  if (!f.cause_options) return;
+  const ids = f.cause_options.map((o) => o.id);
+  if (new Set(ids).size !== ids.length) ctx.addIssue({ code: "custom", message: `${f.id}: duplicate cause option ids` });
+  if (!ids.includes(f.correct_cause!)) ctx.addIssue({ code: "custom", message: `${f.id}: correct_cause "${f.correct_cause}" is not an option id` });
 });
 
 export const moduleSchema = z

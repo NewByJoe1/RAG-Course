@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { CauseReveal } from "@/components/failures/CauseReveal";
+import type { CauseOption } from "@/lib/course/causes";
 
 export const metadata = { title: "Failure gallery · RAG Course" };
 
@@ -24,7 +26,7 @@ export default async function FailureGallery({ searchParams }: { searchParams: {
 
   let query = supabase
     .from("failure_cases")
-    .select("id, title, category, user_query, retrieved_context, bad_output, symptom, root_cause, fix, order_index, modules!inner(title, slug, order_index)")
+    .select("id, title, category, user_query, retrieved_context, bad_output, symptom, root_cause, fix, cause_options, correct_cause, order_index, modules!inner(title, slug, order_index)")
     .order("order_index", { referencedTable: "modules" })
     .order("order_index");
   if (category) query = query.eq("category", category);
@@ -89,15 +91,14 @@ export default async function FailureGallery({ searchParams }: { searchParams: {
                     <dt className="font-medium">Broken output</dt>
                     <dd className="mt-1 rounded bg-red-50 p-2 dark:bg-red-950">{c.bad_output}</dd>
                   </div>
-                  <div>
-                    <dt className="font-medium">Root cause</dt>
-                    <dd className="mt-1">{c.root_cause}</dd>
-                  </div>
-                  <div>
-                    <dt className="font-medium">Fix</dt>
-                    <dd className="mt-1 rounded bg-green-50 p-2 dark:bg-green-950">{c.fix}</dd>
-                  </div>
                 </dl>
+                <CauseReveal
+                  caseId={c.id}
+                  rootCause={c.root_cause}
+                  fix={c.fix}
+                  causeOptions={c.cause_options as CauseOption[] | null}
+                  correctCause={c.correct_cause}
+                />
               </details>
             </li>
           );

@@ -225,6 +225,12 @@ Hybrid wins **8 of 10**. Now look at the 2 it loses and say why. The losses show
       symptom: "Boilerplate outranks the clause that actually answers the question.",
       root_cause: "Vector search alone matched loose similarity, with no keyword signal to anchor it.",
       fix: "Use hybrid retrieval so keyword matches on \"disclose\", \"third party\" and similar terms pull the right clause up. Boilerplate like signature blocks is dropped later, in post-retrieval.",
+      cause_options: [
+        { id: "a", text: "Vector search alone matched loose similarity" },
+        { id: "b", text: "The BM25 index was never built" },
+        { id: "c", text: "The chunk size was too small" },
+      ],
+      correct_cause: "a",
     },
     {
       id: "m03-f02",
@@ -237,6 +243,12 @@ Hybrid wins **8 of 10**. Now look at the 2 it loses and say why. The losses show
       symptom: "Keyword search finds nothing for a clause that is plainly in the contract.",
       root_cause: "BM25 matches exact word forms, and \"terminate\" ≠ \"termination\".",
       fix: "Stem or lemmatise words at both index time and query time, and rely on the vector half of hybrid to cover word-form differences.",
+      cause_options: [
+        { id: "a", text: "The vector index is out of date" },
+        { id: "b", text: "BM25 treats the two word forms as different" },
+        { id: "c", text: "The fusion weight is too high" },
+      ],
+      correct_cause: "b",
     },
     {
       id: "m03-f03",
@@ -252,6 +264,12 @@ Hybrid wins **8 of 10**. Now look at the 2 it loses and say why. The losses show
       symptom: "Duplicate entries in the top results crowd out other relevant clauses.",
       root_cause: "The fusion step merged results by position instead of by chunk ID, so one chunk counted as two entries.",
       fix: "Merge on chunk ID before scoring, so each chunk appears once with its combined RRF score.",
+      cause_options: [
+        { id: "a", text: "Fusion merged by position, not chunk ID" },
+        { id: "b", text: "The embedding model is wrong" },
+        { id: "c", text: "The query rewrite was too long for the embedder" },
+      ],
+      correct_cause: "a",
     },
   ],
 };

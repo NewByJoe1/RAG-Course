@@ -58,4 +58,59 @@ describe("course content", () => {
     const published = modules.filter((m) => m.is_published).map((m) => m.order_index);
     expect(published).toEqual([1, 2, 3, 4, 5]);
   });
+
+  describe("failure cause options", () => {
+    const m03 = modules.find((m) => m.id === "m03")!;
+    const base = m03.failure_cases[0];
+    const withCase = (fc: object) => parse({ ...m03, failure_cases: [{ ...base, ...fc }, ...m03.failure_cases.slice(1)] });
+
+    it("gives every failure case three options with a valid correct cause", () => {
+      for (const m of modules.filter((x) => x.failure_cases.length)) {
+        for (const f of m.failure_cases) {
+          expect(f.cause_options, f.id).toHaveLength(3);
+          expect(f.cause_options!.map((o) => o.id)).toContain(f.correct_cause);
+        }
+      }
+    });
+
+    it("keeps the full root cause as the post-pick explanation, separate from the short option", () => {
+      for (const f of modules.flatMap((m) => m.failure_cases).filter((x) => x.cause_options)) {
+        const correct = f.cause_options!.find((o) => o.id === f.correct_cause)!.text;
+        expect(f.root_cause.length, f.id).toBeGreaterThan(0);
+        expect(correct.length, `${f.id} correct option should be short`).toBeLessThanOrEqual(60);
+      }
+    });
+
+    it("doesn't give away the answer by length: the correct option is the longest in a third of cases or fewer", () => {
+      const cases = modules.flatMap((m) => m.failure_cases).filter((f) => f.cause_options);
+      const longest = cases.filter((f) => {
+        const len = f.cause_options!.find((o) => o.id === f.correct_cause)!.text.length;
+        return f.cause_options!.every((o) => o.id === f.correct_cause || o.text.length < len);
+      });
+      // Reported on every run so content authors can see the number.
+      console.info(`[cause options] correct option is the longest in ${longest.length} of ${cases.length}: ${longest.map((f) => f.id).join(", ") || "none"}`);
+      expect(longest.length).toBeLessThanOrEqual(Math.ceil(cases.length / 3));
+    });
+
+    it("rejects options without a correct cause, or the reverse", () => {
+      expect(withCase({ correct_cause: null }).success).toBe(false);
+      expect(withCase({ cause_options: null }).success).toBe(false);
+    });
+
+    it("rejects a correct cause that isn't an option, duplicate ids, and a single option", () => {
+      expect(withCase({ correct_cause: "z" }).success).toBe(false);
+      expect(withCase({ cause_options: [{ id: "a", text: "x" }, { id: "a", text: "y" }], correct_cause: "a" }).success).toBe(false);
+      expect(withCase({ cause_options: [{ id: "a", text: "x" }], correct_cause: "a" }).success).toBe(false);
+    });
+
+    it("gives every published failure case cause options", () => {
+      const missing = modules
+        .filter((m) => m.is_published)
+        .flatMap((m) => m.failure_cases)
+        .filter((f) => !f.cause_options)
+        .map((f) => f.id);
+      expect(missing).toEqual([]);
+    });
+
+  });
 });

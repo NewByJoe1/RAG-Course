@@ -285,6 +285,12 @@ Also write one sentence on what still confuses you. It drives your spaced review
       root_cause:
         "Over-expansion: the query added generic words (\"agreement\", \"party\", \"information\") that appear in every clause, so everything matched and the permitted-disclosure clause fell to rank 9.",
       fix: "Expand only with specific legal synonyms for the key concept, cap the number of added terms, and drop words that appear in most clauses.",
+      cause_options: [
+        { id: "a", text: "The rewrite added too many generic words" },
+        { id: "b", text: "The metadata filter was too strict" },
+        { id: "c", text: "The index contains duplicate chunks of every clause" },
+      ],
+      correct_cause: "a",
     },
     {
       id: "m02-f02",
@@ -300,6 +306,12 @@ Also write one sentence on what still confuses you. It drives your spaced review
       root_cause:
         "Meaning drift: the rewrite (\"What obligations require the Receiving Party to disclose information to third parties?\") turned a permission question (\"may\") into an obligation question (\"must\"), so a different clause matched.",
       fix: "Tell the rewrite prompt to keep modal verbs (may, must, shall) exactly as asked, and check each rewrite against the original before using it.",
+      cause_options: [
+        { id: "a", text: "The rewrite turned \"may\" into \"must\"" },
+        { id: "b", text: "Retrieval returned the wrong clause" },
+        { id: "c", text: "The synonym table was missing the word \"share\"" },
+      ],
+      correct_cause: "a",
     },
     {
       id: "m02-f03",
@@ -313,6 +325,12 @@ Also write one sentence on what still confuses you. It drives your spaced review
       root_cause:
         "The metadata filter doc_type = NDA was set by default instead of from the question, so the client's MSA, whose confidentiality section holds the answer, was never searched. Nothing relevant was retrieved.",
       fix: "Derive filters from the question and the documents actually on file, fall back to an unfiltered search when a filtered one returns nothing, and log when the fallback fires.",
+      cause_options: [
+        { id: "a", text: "The default NDA filter excluded the MSA" },
+        { id: "b", text: "The MSA was never added to the index" },
+        { id: "c", text: "The query rewrite dropped the word \"agreement\"" },
+      ],
+      correct_cause: "a",
     },
   ],
 };

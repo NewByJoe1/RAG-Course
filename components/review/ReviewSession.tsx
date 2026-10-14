@@ -4,6 +4,8 @@ import { useState, type FormEvent } from "react";
 import { answerReviewCard, rateReviewCard, type AnswerResult } from "@/app/actions/review";
 import { describeAnswer, fieldName, type QuizKind } from "@/lib/course/quiz";
 import { RATINGS, type Rating } from "@/lib/scheduler";
+import { CausePicker } from "@/components/failures/CausePicker";
+import type { CauseOption } from "@/lib/course/causes";
 
 type Base = { id: string; module: string; previews: Record<Rating, string> };
 export type SessionCard =
@@ -16,6 +18,10 @@ export type SessionCard =
       bad_output: string;
       root_cause: string;
       fix: string;
+      cause_options?: CauseOption[] | null;
+      correct_cause?: string | null;
+      /** The failure case's own id, so options appear in the same order as in the gallery. */
+      failureCaseId?: string;
     });
 
 const RATING_LABEL: Record<Rating, string> = { again: "Again", hard: "Hard", good: "Good", easy: "Easy" };
@@ -209,7 +215,10 @@ function QuizCard({ card, onRated }: { card: Extract<SessionCard, { type: "quiz"
 }
 
 function FailureCard({ card, onRated }: { card: Extract<SessionCard, { type: "failure" }>; onRated: (r: Rating) => void }) {
+  // Cases with cause options are diagnosed first; others keep the plain reveal.
+  const hasOptions = Boolean(card.cause_options?.length && card.correct_cause);
   const [revealed, setRevealed] = useState(false);
+  const [pickedCorrect, setPickedCorrect] = useState(true);
   return (
     <div className="space-y-4 rounded-lg border border-neutral-200 p-5 dark:border-neutral-800">
       <p className="text-xs font-medium uppercase tracking-wide text-neutral-500">Failure case · {card.title}</p>
@@ -235,8 +244,20 @@ function FailureCard({ card, onRated }: { card: Extract<SessionCard, { type: "fa
         </div>
       </dl>
 
+      {hasOptions && (
+        <CausePicker
+          caseId={card.failureCaseId ?? card.id}
+          options={card.cause_options!}
+          correct={card.correct_cause!}
+          onChecked={(ok) => {
+            setPickedCorrect(ok);
+            setRevealed(true);
+          }}
+        />
+      )}
+
       {!revealed ? (
-        <div className="space-y-2">
+        !hasOptions && <div className="space-y-2">
           <p className="font-medium">What went wrong, and how would you fix it?</p>
           <button type="button" onClick={() => setRevealed(true)} className={primary}>Show answer</button>
         </div>
@@ -252,7 +273,7 @@ function FailureCard({ card, onRated }: { card: Extract<SessionCard, { type: "fa
               <dd className="mt-1 rounded bg-green-50 p-2 dark:bg-green-950">{card.fix}</dd>
             </div>
           </dl>
-          <RatingButtons cardId={card.id} previews={card.previews} onRated={onRated} />
+          <RatingButtons cardId={card.id} previews={card.previews} onlyAgain={hasOptions && !pickedCorrect} onRated={onRated} />
         </>
       )}
     </div>

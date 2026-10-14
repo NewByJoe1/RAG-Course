@@ -19,6 +19,8 @@ type Row = {
     bad_output: string;
     root_cause: string;
     fix: string;
+    cause_options: { id: string; text: string }[] | null;
+    correct_cause: string | null;
     modules: { title: string };
   } | null;
 };
@@ -31,7 +33,7 @@ export default async function ReviewPage() {
     supabase
       .from("review_cards")
       .select(
-        "id, ease_factor, interval_days, quiz_items(id, kind, prompt, choices, modules(title)), failure_cases(id, title, user_query, retrieved_context, bad_output, root_cause, fix, modules(title))",
+        "id, ease_factor, interval_days, quiz_items(id, kind, prompt, choices, modules(title)), failure_cases(id, title, user_query, retrieved_context, bad_output, root_cause, fix, cause_options, correct_cause, modules(title))",
       )
       .lte("due_at", now)
       .order("due_at")
@@ -50,7 +52,7 @@ export default async function ReviewPage() {
     if (r.failure_cases) {
       const f = r.failure_cases;
       // Card id, not the failure case id: rating targets the review_cards row.
-      return [{ ...f, type: "failure", id: r.id, previews, module: f.modules.title }];
+      return [{ ...f, type: "failure", id: r.id, failureCaseId: f.id, previews, module: f.modules.title }];
     }
     return [];
   });

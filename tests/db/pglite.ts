@@ -43,13 +43,28 @@ export async function createTestDb(opts: { upTo?: string } = {}) {
     await db.exec(readFileSync(path.join(MIGRATIONS_DIR, file), "utf8"));
   }
 
+  // When stopping early (upTo), the schema predates some content fields
+  // (e.g. 0006's cause_options): seed only the columns that exist yet, as the
+  // live database would have held them. With every migration applied, an
+  // unknown column still fails loudly.
+  let existing: ((table: string, row: Record<string, unknown>) => Record<string, unknown>) | null = null;
+  if (opts.upTo) {
+    const { rows } = await db.query<{ table_name: string; column_name: string }>(
+      `select table_name, column_name from information_schema.columns where table_schema = 'public'`,
+    );
+    const cols = new Map<string, Set<string>>();
+    for (const r of rows) cols.set(r.table_name, (cols.get(r.table_name) ?? new Set()).add(r.column_name));
+    existing = (table, row) => Object.fromEntries(Object.entries(row).filter(([k]) => cols.get(table)?.has(k)));
+  }
+  const seed = (table: string, row: Record<string, unknown>) => insert(db, table, existing ? existing(table, row) : row);
+
   // Seed real course content as the superuser (like scripts/seed.ts with the service role).
   for (const m of modules) {
     const { lesson_steps, quiz_items, failure_cases, ...row } = m;
-    await insert(db, "modules", row);
-    for (const s of lesson_steps) await insert(db, "lesson_steps", { code_snippet: null, code_language: null, ...s, module_id: m.id });
-    for (const q of quiz_items) await insert(db, "quiz_items", { lesson_step_id: null, ...q, module_id: m.id });
-    for (const f of failure_cases) await insert(db, "failure_cases", { ...f, module_id: m.id });
+    await seed("modules", row);
+    for (const s of lesson_steps) await seed("lesson_steps", { code_snippet: null, code_language: null, ...s, module_id: m.id });
+    for (const q of quiz_items) await seed("quiz_items", { lesson_step_id: null, ...q, module_id: m.id });
+    for (const f of failure_cases) await seed("failure_cases", { cause_options: null, correct_cause: null, ...f, module_id: m.id });
   }
 
   /** Run queries as an API role, optionally as a signed-in user. */

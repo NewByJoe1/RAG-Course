@@ -287,6 +287,12 @@ Write down one project where RAG is the right call and one where it isn't, and s
       root_cause:
         "Pure vector search. The embedding of 'E4021' carries little meaning, so it matched generically 'error-ish' chunks rather than the exact code.",
       fix: "Add keyword (BM25) search alongside vector search and merge the results (hybrid retrieval). Exact identifiers then match lexically.",
+      cause_options: [
+        { id: "a", text: "Vector search alone can't match an exact error code" },
+        { id: "b", text: "The chunk size was too large" },
+        { id: "c", text: "The LLM ignored the retrieved chunks" },
+      ],
+      correct_cause: "a",
     },
     {
       id: "m01-f02",
@@ -302,6 +308,12 @@ Write down one project where RAG is the right call and one where it isn't, and s
       root_cause:
         "Fixed-size chunking split the paragraph. The next sentence ('After 30 days, annual plans are refunded pro rata') landed in a separate chunk that scored lower and fell outside top-k.",
       fix: "Chunk on semantic boundaries (paragraphs or headings) with overlap, or retrieve neighbouring chunks alongside each hit.",
+      cause_options: [
+        { id: "a", text: "Fixed-size chunking split the policy in half" },
+        { id: "b", text: "The embedding model doesn't understand refund language" },
+        { id: "c", text: "The generation prompt told the model to keep answers short" },
+      ],
+      correct_cause: "a",
     },
     {
       id: "m01-f03",
@@ -317,6 +329,12 @@ Write down one project where RAG is the right call and one where it isn't, and s
       root_cause:
         "The index was built once and never refreshed. Retrieval and generation both worked; the corpus was wrong.",
       fix: "Re-index on a schedule or on change events, store an indexed_at timestamp per chunk, and surface it in citations so staleness is visible.",
+      cause_options: [
+        { id: "a", text: "The index was never refreshed" },
+        { id: "b", text: "The LLM's training data is out of date" },
+        { id: "c", text: "The retriever returned too few chunks" },
+      ],
+      correct_cause: "a",
     },
   ],
 };

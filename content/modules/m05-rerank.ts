@@ -227,6 +227,12 @@ Then look at a question where it does not move to rank 1, and note it for Module
       symptom: "Length wins over relevance in the re-ranked order.",
       root_cause: "The re-ranker is biased toward longer chunks with more overlapping words.",
       fix: "Keep chunk lengths consistent (trim in post-retrieval), and test the re-ranker on pairs of short vs long chunks in your 30-pair set.",
+      cause_options: [
+        { id: "a", text: "The re-ranker favours longer chunks" },
+        { id: "b", text: "The BM25 index is missing for this contract" },
+        { id: "c", text: "The query rewrite failed" },
+      ],
+      correct_cause: "a",
     },
     {
       id: "m05-f02",
@@ -242,6 +248,12 @@ Then look at a question where it does not move to rank 1, and note it for Module
       symptom: "A clause that repeats the question's words outranks the clause that answers it.",
       root_cause: "The re-ranker matched surface words instead of the clause that answers the question.",
       fix: "Add tricky look-alike examples like this to the 30-pair set; if the off-the-shelf model keeps failing them, that is the case for Module 6's fine-tune.",
+      cause_options: [
+        { id: "a", text: "It matched surface words, not meaning" },
+        { id: "b", text: "The deduper removed the clause that answers it" },
+        { id: "c", text: "The score threshold was too low" },
+      ],
+      correct_cause: "a",
     },
     {
       id: "m05-f03",
@@ -258,6 +270,12 @@ Then look at a question where it does not move to rank 1, and note it for Module
       symptom: "Copies of one clause fill the top slots; a different relevant clause never reaches generation.",
       root_cause: "The pipeline re-ranks before post-retrieval cleans, so duplicates fill the top slots.",
       fix: "Run post-retrieval (dedupe, filter, trim) before re-ranking, in the order the wiring diagram shows.",
+      cause_options: [
+        { id: "a", text: "Re-ranking ran before de-duplication" },
+        { id: "b", text: "The cross-encoder model failed to load" },
+        { id: "c", text: "The generation prompt is wrong" },
+      ],
+      correct_cause: "a",
     },
   ],
 };
