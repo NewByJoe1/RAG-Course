@@ -7,6 +7,9 @@ export async function SiteHeader() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  const { data: me } = user
+    ? await supabase.from("profiles").select("is_reviewer").eq("id", user.id).maybeSingle()
+    : { data: null };
 
   return (
     <header className="border-b border-neutral-200 dark:border-neutral-800">
@@ -17,6 +20,7 @@ export async function SiteHeader() {
         <Link href="/mastery">Mastery</Link>
         <Link href="/failures">Failure gallery</Link>
         <Link href="/capstone">Capstone</Link>
+        {me?.is_reviewer && <Link href="/reviewer">Reviewer</Link>}
         <span className="ml-auto flex items-center gap-3">
           {user ? (
             <>

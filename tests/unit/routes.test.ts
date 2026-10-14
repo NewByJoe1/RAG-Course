@@ -5,7 +5,7 @@ describe("isPublicPath", () => {
   it.each(["/", "/login", "/signup", "/auth/callback", "/failures", "/failures/x", "/unsubscribe", "/api/cron/review-reminders", "/api/reminders/unsubscribe"])("%s is public", (p) => {
     expect(isPublicPath(p)).toBe(true);
   });
-  it.each(["/modules/rag-foundations", "/mastery", "/review", "/streak", "/api/other", "/loginx", "/failuresx"])("%s is protected", (p) => {
+  it.each(["/modules/rag-foundations", "/mastery", "/review", "/streak", "/reviewer", "/reviewer/abc", "/api/other", "/loginx", "/failuresx"])("%s is protected", (p) => {
     expect(isPublicPath(p)).toBe(false);
   });
 });

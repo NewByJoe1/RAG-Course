@@ -80,23 +80,10 @@ describe("capstone_checks access", () => {
   });
 });
 
-describe("defence (reviewer)", () => {
-  it("can only be set by a reviewer", async () => {
-    await expect(asUser(ALICE, () => q(`select public.set_capstone_defence($1, true)`, [ALICE]))).rejects.toThrow(/only reviewers/);
-  });
-
-  it("adds and removes defence on main without touching the CI criteria", async () => {
-    const on = await asUser(REVIEWER, () => q<{ m: string[] }>(`select public.set_capstone_defence($1, true) as m`, [ALICE]));
-    expect(on.rows[0].m.sort()).toEqual([...FIVE, "defence"].sort());
-    const again = await asUser(REVIEWER, () => q<{ m: string[] }>(`select public.set_capstone_defence($1, true) as m`, [ALICE]));
-    expect(again.rows[0].m.filter((c) => c === "defence")).toHaveLength(1);
-    const off = await asUser(REVIEWER, () => q<{ m: string[] }>(`select public.set_capstone_defence($1, false) as m`, [ALICE]));
-    expect(off.rows[0].m.sort()).toEqual([...FIVE].sort());
-  });
-
-  it("creates the main row if CI hasn't reported yet", async () => {
-    const r = await asUser(REVIEWER, () => q<{ m: string[] }>(`select public.set_capstone_defence($1, true) as m`, [BOB]));
-    expect(r.rows[0].m).toEqual(["defence"]);
+describe("defence", () => {
+  // Recording defences (reviewer screen) is covered in defence.test.ts.
+  it("can no longer be set through the removed admin shortcut", async () => {
+    await expect(asUser(REVIEWER, () => q(`select public.set_capstone_defence($1, true)`, [ALICE]))).rejects.toThrow(/does not exist/);
   });
 });
 
@@ -114,7 +101,8 @@ describe("claim_capstone_mastery (Module 12)", () => {
   });
 
   it("records mastered_at once all six are met, and keeps the first timestamp", async () => {
-    await asUser(REVIEWER, () => q(`select public.set_capstone_defence($1, true)`, [ALICE]));
+    // Defence arrives via a recorded defence; here the service role sets it directly.
+    await serviceUpsert(ALICE, "main", [...FIVE, "defence"]);
     const first = await asUser(ALICE, () => q<{ at: Date }>(`select public.claim_capstone_mastery() as at`));
     expect(first.rows[0].at).not.toBeNull();
 
