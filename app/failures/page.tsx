@@ -15,6 +15,7 @@ const CATEGORIES = {
   prompt: "Prompt",
   evaluation: "Evaluation",
   monitoring: "Monitoring",
+  guardrail: "Guardrail",
 } as const;
 type Category = keyof typeof CATEGORIES;
 

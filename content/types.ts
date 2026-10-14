@@ -71,6 +71,7 @@ export const failureCaseSchema = z.object({
     "prompt",
     "evaluation",
     "monitoring",
+    "guardrail",
   ]),
   user_query: z.string().min(1),
   retrieved_context: z.array(z.object({ source: z.string(), text: z.string(), score: z.number().optional() })),

@@ -46,15 +46,17 @@ describe("0006 failure cause options", () => {
   });
 });
 
-describe("0007 failure categories", () => {
-  it("files Modules 6–8 under evaluation and monitoring", async () => {
+describe("0007/0008 failure categories", () => {
+  it("stores every module's evaluation, monitoring and guardrail cases", async () => {
+    const expected: Record<string, number> = {};
+    for (const f of modules.flatMap((m) => m.failure_cases)) {
+      if (["evaluation", "monitoring", "guardrail"].includes(f.category)) expected[f.category] = (expected[f.category] ?? 0) + 1;
+    }
     const { rows } = await t.db.query<{ category: string; n: number }>(
-      `select category, count(*)::int as n from public.failure_cases where category in ('evaluation', 'monitoring') group by 1 order by 1`,
+      `select category, count(*)::int as n from public.failure_cases where category in ('evaluation', 'monitoring', 'guardrail') group by 1`,
     );
-    expect(rows).toEqual([
-      { category: "evaluation", n: 5 },
-      { category: "monitoring", n: 3 },
-    ]);
+    expect(Object.fromEntries(rows.map((r) => [r.category, r.n]))).toEqual(expected);
+    expect(expected).toEqual({ evaluation: 7, monitoring: 3, guardrail: 2 });
   });
 
   it("still rejects unknown categories", async () => {
