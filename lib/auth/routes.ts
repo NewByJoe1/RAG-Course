@@ -1,7 +1,7 @@
 // Route access rules shared by middleware and tests.
 
 // /api/cron authenticates with CRON_SECRET; unsubscribe links are HMAC-signed.
-const PUBLIC_PREFIXES = ["/login", "/signup", "/auth", "/failures", "/unsubscribe", "/api/cron", "/api/reminders"];
+const PUBLIC_PREFIXES = ["/login", "/signup", "/auth", "/failures", "/glossary", "/unsubscribe", "/api/cron", "/api/reminders"];
 const AUTH_PAGES = ["/login", "/signup"];
 
 function matches(pathname: string, prefix: string) {

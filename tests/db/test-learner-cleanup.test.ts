@@ -20,6 +20,7 @@ beforeAll(async () => {
   const card = await q<{ id: string }>(`insert into public.review_cards (user_id, quiz_item_id) values ($1, 'm01-q01') returning id`, [LEARNER]);
   await q(`insert into public.review_log (user_id, card_id, rating, interval_days) values ($1, $2, 'good', 7)`, [LEARNER, card.rows[0].id]);
   await q(`insert into public.capstone_checks (user_id, check_key, ci_status) values ($1, 'main', 'success')`, [LEARNER]);
+  await q(`insert into public.explain_back_responses (user_id, module_id, response) values ($1, 'm01', 'Retrieval miss.')`, [LEARNER]);
   const six = JSON.stringify(Array.from({ length: 6 }, () => ({ question: "Q", citation_verified: true, passed: true })));
   await t.as("authenticated", REVIEWER, () =>
     q(`insert into public.capstone_defences (learner_id, questions, closing_passed) values ($1, $2, true)`, [LEARNER, six]),

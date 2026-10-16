@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { PIPELINE_STAGE_IDS } from "./pipeline";
+import { GLOSSARY } from "./glossary";
 
 /** Marks unwritten content. Modules containing it can't be published. */
 export const TODO_MARKER = "[TODO]";
@@ -9,7 +11,7 @@ export const TODO_MARKER = "[TODO]";
 export const lessonStepSchema = z.object({
   id: z.string().regex(/^m\d{2}-s\d{2}$/),
   order_index: z.number().int().nonnegative(),
-  kind: z.enum(["concept", "example", "exercise", "reflection"]),
+  kind: z.enum(["warm_up", "concept", "example", "exercise", "reflection"]),
   title: z.string().min(1),
   body_md: z.string().min(1),
   code_snippet: z.string().nullable().default(null),
@@ -93,6 +95,33 @@ export const failureCaseSchema = z.object({
   if (!ids.includes(f.correct_cause!)) ctx.addIssue({ code: "custom", message: `${f.id}: correct_cause "${f.correct_cause}" is not an option id` });
 });
 
+const stageSchema = z.enum(PIPELINE_STAGE_IDS);
+
+export const workedExampleStepSchema = z.object({
+  id: z.string().regex(/^m\d{2}-w\d{2}$/),
+  order_index: z.number().int().nonnegative(),
+  title: z.string().min(1),
+  body_md: z.string().min(1),
+  code_snippet: z.string().nullable().default(null),
+  code_language: z.string().nullable().default(null),
+  stage: stageSchema.nullable().default(null),
+  /** What the running example looks like at this step. */
+  query_state: z.string().nullable().default(null),
+});
+
+export const studyGuidePointSchema = z.object({
+  id: z.string().regex(/^m\d{2}-p\d{2}$/),
+  order_index: z.number().int().nonnegative(),
+  point: z.string().min(1),
+  /** One narration paragraph; the study guide doubles as a video script. */
+  narration: z.string().min(1),
+});
+
+/** Pilot seam: one module's process video. Null everywhere until the trial. */
+export const videoSchema = z.object({ src: z.string().min(1), title: z.string().min(1), poster: z.string().optional(), captions: z.string().optional() });
+
+const glossaryIds = new Set(GLOSSARY.map((g) => g.id));
+
 export const moduleSchema = z
   .object({
     id: z.string().regex(/^m\d{2}$/),
@@ -106,6 +135,14 @@ export const moduleSchema = z
     lesson_steps: z.array(lessonStepSchema),
     quiz_items: z.array(quizItemSchema),
     failure_cases: z.array(failureCaseSchema),
+    // Lesson structure (0010). All-or-nothing: setting hook requires the rest.
+    hook: z.string().min(1).nullable().default(null),
+    pipeline_stages: z.array(stageSchema).default([]),
+    explain_back_prompt: z.string().min(1).nullable().default(null),
+    video: videoSchema.nullable().default(null),
+    worked_example: z.array(workedExampleStepSchema).default([]),
+    glossary: z.array(z.string()).default([]),
+    study_guide: z.array(studyGuidePointSchema).default([]),
   })
   .superRefine((m, ctx) => {
     const stepIds = new Set(m.lesson_steps.map((s) => s.id));
@@ -123,6 +160,28 @@ export const moduleSchema = z
     check("lesson_step", m.lesson_steps);
     check("quiz_item", m.quiz_items);
     check("failure_case", m.failure_cases);
+    check("worked_example step", m.worked_example);
+    check("study_guide point", m.study_guide);
+
+    for (const g of m.glossary) {
+      if (!glossaryIds.has(g)) ctx.addIssue({ code: "custom", message: `${m.id}: glossary term "${g}" isn't in content/glossary.ts` });
+    }
+    if (new Set(m.glossary).size !== m.glossary.length) ctx.addIssue({ code: "custom", message: `${m.id}: duplicate glossary terms` });
+
+    // The beginner lesson format: once a module has a hook, it needs every part.
+    if (m.hook !== null) {
+      const need = (ok: boolean, what: string) => ok || ctx.addIssue({ code: "custom", message: `${m.id} has a hook, so it needs ${what}` });
+      need(m.pipeline_stages.length > 0, "pipeline_stages");
+      need(m.explain_back_prompt !== null, "an explain_back_prompt");
+      need(m.worked_example.length >= 3, "at least 3 worked_example steps");
+      need(m.study_guide.length >= 3, "at least 3 study_guide points");
+      need(m.glossary.length >= 3, "at least 3 glossary terms");
+      need(m.lesson_steps[0]?.kind === "warm_up", "a warm_up lesson step first");
+      need(!m.lesson_steps.some((x) => x.kind === "example"), "its worked example in worked_example, not a lesson step");
+      need(m.failure_cases.every((f) => f.cause_options), "cause options on every failure case");
+    } else if (m.worked_example.length || m.study_guide.length || m.explain_back_prompt || m.pipeline_stages.length) {
+      ctx.addIssue({ code: "custom", message: `${m.id}: lesson-structure fields need a hook too` });
+    }
     // Drafts can be seeded unpublished, but placeholders must never reach learners.
     if (m.is_published) {
       const todos: string[] = [];

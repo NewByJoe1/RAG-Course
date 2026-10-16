@@ -16,6 +16,7 @@ export const LEARNER_TABLES = [
   ["review_log", "user_id"],
   ["capstone_checks", "user_id"],
   ["capstone_defences", "learner_id"],
+  ["explain_back_responses", "user_id"],
 ] as const;
 
 export type Log = (msg: string) => void;

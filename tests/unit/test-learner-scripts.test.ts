@@ -13,6 +13,7 @@ function fakeAdmin() {
     review_log: [],
     capstone_checks: [],
     capstone_defences: [],
+    explain_back_responses: [],
   };
   const calls: string[] = [];
   let n = 0;

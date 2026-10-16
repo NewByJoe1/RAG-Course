@@ -2,6 +2,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { modules } from "@/content";
+import { GLOSSARY, glossaryRow } from "@/content/glossary";
 
 const MIGRATIONS_DIR = path.join(__dirname, "../../supabase/migrations");
 
@@ -58,13 +59,27 @@ export async function createTestDb(opts: { upTo?: string; modules?: string[] } =
     for (const r of rows) cols.set(r.table_name, (cols.get(r.table_name) ?? new Set()).add(r.column_name));
     existing = (table, row) => Object.fromEntries(Object.entries(row).filter(([k]) => cols.get(table)?.has(k)));
   }
+  const tableExists = async (table: string) =>
+    (await db.query(`select 1 from information_schema.tables where table_schema = 'public' and table_name = $1`, [table])).rows.length > 0;
   const seed = (table: string, row: Record<string, unknown>) => insert(db, table, existing ? existing(table, row) : row);
+  const hasLessonFormat = await tableExists("worked_example_steps");
+  if (hasLessonFormat) for (const g of GLOSSARY) await seed("glossary_terms", glossaryRow(g));
 
   // Seed real course content as the superuser (like scripts/seed.ts with the service role).
   for (const m of modules.filter((x) => !opts.modules || opts.modules.includes(x.id))) {
-    const { lesson_steps, quiz_items, failure_cases, ...row } = m;
+    const { lesson_steps, quiz_items, failure_cases, worked_example, glossary, study_guide, ...row } = m;
     await seed("modules", row);
-    for (const s of lesson_steps) await seed("lesson_steps", { code_snippet: null, code_language: null, ...s, module_id: m.id });
+    if (hasLessonFormat) {
+      for (const w of worked_example ?? []) await seed("worked_example_steps", { code_snippet: null, code_language: null, stage: null, query_state: null, ...w, module_id: m.id });
+      for (const p of study_guide ?? []) await seed("study_guide_points", { ...p, module_id: m.id });
+      const terms = glossary ?? [];
+      for (let i = 0; i < terms.length; i++) await seed("module_glossary", { module_id: m.id, term_id: terms[i], order_index: i + 1 });
+    }
+    for (const s of lesson_steps) {
+      // Before 0010 there was no 'warm_up' kind; warm-ups were plain exercises.
+      const kind = !hasLessonFormat && s.kind === "warm_up" ? "exercise" : s.kind;
+      await seed("lesson_steps", { code_snippet: null, code_language: null, ...s, kind, module_id: m.id });
+    }
     for (const q of quiz_items) await seed("quiz_items", { lesson_step_id: null, ...q, module_id: m.id });
     for (const f of failure_cases) await seed("failure_cases", { cause_options: null, correct_cause: null, ...f, module_id: m.id });
   }
