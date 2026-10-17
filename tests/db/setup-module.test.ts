@@ -60,7 +60,7 @@ describe("0011 backfill", () => {
     await db.createUser(OTHER, "earlier@example.com");
     await db.db.query(`insert into public.progress (user_id, module_id, status, started_at) values ($1, 'm01', 'in_progress', now())`, [OTHER]);
     await db.migrateRest();
-    const { rows } = await db.db.query(`select passed_at from public.progress where user_id = $1 and module_id = 'm00'`, [OTHER]);
+    const { rows } = await db.db.query<{ passed_at: string | null }>(`select passed_at from public.progress where user_id = $1 and module_id = 'm00'`, [OTHER]);
     expect(rows).toHaveLength(1);
     expect(rows[0].passed_at).not.toBeNull();
   });
