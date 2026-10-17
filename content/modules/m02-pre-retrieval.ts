@@ -1,5 +1,6 @@
 import type { ModuleContent } from "../types";
 import { cite, NDA_CLAUSES as C, RUNNING_QUESTION } from "../nda";
+import { md } from "../md";
 
 // Module 2, in Module 1's lesson format, on the running example: one NDA
 // (Acme Corp and Beta Ltd) and one question, "Can we share this with a
@@ -195,17 +196,227 @@ when_unsure: go_up   # never pick a weaker model than the tag allows`,
       order_index: 6,
       kind: "exercise",
       title: "Hands-on: try it yourself",
-      body_md: `**Predict first:** after translating the question into the NDA's words, where do you think ${C.permittedDisclosure.section} will rank? And will ${C.contractors.section} make the top 3? Write both guesses down before you start.
+      body_md: md`**Predict first:** after translating the question into the NDA's words, where do you think ${C.permittedDisclosure.section} will rank? And will ${C.contractors.section} make the top 3? Write both guesses down before you start.
 
-- **Guided:** Add the synonym table and the supplied rewrite prompt to your Module 1 system. Ask "${RUNNING_QUESTION}" again and write down the top 5 clauses before and after, with their scores.
-- **Partial:** Write \`prompts/tag.md\` and \`config/models.yaml\`. Tag five questions about the NDA, including the subcontractor question and "How long does the NDA last?", and check each one goes to the model you'd expect. One hint: when the tag is a close call, the stronger model wins.
-- **Solo:** Grow the synonym table to 20 everyday words the NDA says differently (sister company → Affiliate, secret → Confidential Information, how long → Term), and run the search with the table alone, no language model. Compare its top 3 with the rewrite prompt's top 3.
+:::tier guided
+:::step Open your project and make this module's branch
+**Where:** in your terminal (see Module 0 if you need a reminder of how to open it).
 
-**Files you create:** \`prompts/rewrite.md\`, the plain text prompt that rewrites the question; \`prompts/tag.md\`, the plain text prompt that tags it; and \`config/models.yaml\`, the settings file that says which model answers each tag.
+**Do:** go into your project folder, then make a **branch** called \`pre-retrieval\` for this module. It starts from where you are now, Module 1's \`naive-rag\` branch, so everything you built there comes along.
 
-**Capstone branch:** save this work on a branch called \`pre-retrieval\` in your course project. It builds on your naive-rag branch and adds one function, \`rewrite_query()\`, which takes the question and hands back the searches to run, the filter and the routing tag. Add tests too: small pieces of code that run \`rewrite_query()\` on the subcontractor question and check what comes back.
+~~~bash
+cd rag-course-project
+git switch -c pre-retrieval
+~~~
 
-**Check it with your assistant:** ask your coding assistant, "Does my pre-retrieval branch return the original question plus its rewrites, a doc_type filter and a routing tag, and does the tag pick the model from config/models.yaml?"`,
+**You should see:** \`Switched to a new branch 'pre-retrieval'\`.
+
+**If it didn't work:** if it says the branch already exists, you've started this before: run \`git switch pre-retrieval\` instead. If \`cd\` can't find the folder, open a new terminal (it starts in your home folder) and try again.
+:::
+
+:::step Run Module 1's search once more
+**Where:** in your terminal, inside \`rag-course-project\`.
+
+**Do:** run the search exactly as Module 1 left it, so you have a "before" to compare with.
+
+~~~bash
+uv run ask.py "${RUNNING_QUESTION}"
+~~~
+
+**You should see:** five lines, each a score, a section number and a title, as at the end of Module 1. Write down the five sections in order and where ${C.permittedDisclosure.section} is. That's your "before".
+
+**If it didn't work:** "No such file" means \`ask.py\` isn't here. Run \`git status\`: it should say \`On branch pre-retrieval\`. If Module 1's Guided steps aren't finished, finish them first, then come back to step 1.
+:::
+
+:::step Write the synonym table and the rewrite prompt
+You'll put the two translation tools from this lesson into two plain text files. The **synonym table** goes in \`data/synonyms.yaml\`. YAML is a simple format for settings and lists: each line is a name, a colon, then its value. The **rewrite prompt** goes in \`prompts/rewrite.md\`, just like \`prompts/generate.md\` in Module 1.
+
+**Where:** in Claude Code. Start it from your project folder:
+
+~~~bash
+claude
+~~~
+
+**Do:** copy the whole box below, paste it into Claude Code, and press Enter.
+
+~~~prompt
+Create two plain text files containing exactly the text below, with nothing added or changed.
+
+File 1: data/synonyms.yaml
+
+# Everyday words (left) and the NDA's own words for them (right).
+subcontractor: [third party, Permitted Recipient, contractor]
+share: [disclose]
+
+File 2: prompts/rewrite.md
+
+Rewrite the question below the way this non-disclosure agreement would say it, so that a search finds the right clauses.
+- Write 3 rewrites, one per line, and nothing else: no numbers, no bullet points, no explanations.
+- Use the agreement's own capitalised terms where they fit, such as Confidential Information, Permitted Recipient, Receiving Party, Disclosing Party and Affiliate.
+- Keep permission words exactly as asked: "may" or "can" must never become "must".
+- Do not answer the question. Only reword it.
+
+Question: {question}
+~~~
+
+Claude Code asks before it creates each file. Check it's the file you expected and choose **Yes**.
+
+**You should see:** Claude Code saying it created \`data/synonyms.yaml\` and \`prompts/rewrite.md\`. The \`{question}\` at the end is a gap your code fills in with the real question.
+
+**If it didn't work:** if Claude Code rewords the files or adds to them, ask it: "Please make both files match the text I gave you exactly."
+:::
+
+:::step Ask Claude Code to search with the rewrites
+Your code needs to ask Claude for the rewrites. It does that through Claude Code's **print mode**: \`claude -p "a message"\` sends one message to Claude, prints the reply and stops. You're already signed in, so no other account is needed. \`--model haiku\` picks **Haiku**, Claude's small, fast model.
+
+**Where:** in Claude Code, still in your project.
+
+**Do:** paste this and press Enter.
+
+~~~prompt
+Add pre-retrieval to this project's search, in Python, run with uv.
+- To ask Claude something from Python, run Claude Code in print mode as a subprocess: claude -p "<the prompt>" --model haiku, and read what it prints. Don't use any other account or key.
+- In rag.py, write rewrite_query(question). It reads data/synonyms.yaml (add the pyyaml library with uv) and, for every left-hand word found in the question (ignoring capital letters), adds the right-hand words to the end of the question. Then it fills {question} in prompts/rewrite.md, sends it to Claude with --model haiku, and keeps up to 3 non-empty lines of the reply as rewrites. It returns a list of searches: first the question with the synonym words added, then the rewrites. If the claude call fails, it prints a warning and returns just the first search.
+- Rename the current search in rag.py to meaning_search(text, k), unchanged. Then make retrieve(question, k) call rewrite_query, run meaning_search for each search, and merge the results: each clause appears once, with its best score, highest first, and return the top k.
+- Change ask.py so it first prints "Searches:" and each search on its own line, then the top 5 chunks as before: score, section, title.
+When it works, run it with the question "Can we share this with a subcontractor?" and show me the output.
+~~~
+
+**You should see:** Claude Code asking your permission to change files, add a library and run commands: choose **Yes** each time. The output starts with the searches: your question with "third party Permitted Recipient contractor disclose" added, then three rewrites in the contract's words. Below them are five clause lines. ${C.permittedDisclosure.section} should now rank higher than in your "before" from step 2, often 2nd. Your rewrites and scores won't match anyone else's exactly, and that's fine.
+
+**If it didn't work:** if it shows only one search and a warning, the call to Claude failed. Leave Claude Code (type \`/exit\`), run \`uv run ask.py "${RUNNING_QUESTION}"\` yourself, then start \`claude\` again and paste any error back with "Please fix this."
+:::
+
+:::video m02-rewrite-search
+:::
+
+:::step Tag the question and choose a model
+Now the **routing tag** from this lesson: a one-word label saying how hard the question is, so the right model writes the answer. Claude comes in three sizes: **Haiku** (small and fast), **Sonnet** (the main all-rounder) and **Opus** (the strongest). \`config/models.yaml\` says which one answers each tag.
+
+**Where:** in Claude Code, still in your project.
+
+**Do:** paste this whole box and press Enter.
+
+~~~prompt
+Add routing to this project.
+
+1. Create prompts/tag.md containing exactly this text:
+
+Is the question below simple, multi-clause or conflicting?
+- simple: one clause of the agreement answers it.
+- multi-clause: several clauses must be read together to answer it.
+- conflicting: the clauses seem to disagree about it.
+If you are unsure between two, choose the harder one.
+Reply with one word only: simple, multi-clause or conflicting.
+
+Question: {question}
+
+2. Create config/models.yaml containing exactly this text:
+
+# Which Claude model writes the answer for each routing tag.
+simple: haiku
+multi-clause: sonnet
+conflicting: opus
+# The small, fast model that rewrites and tags questions.
+helper: haiku
+
+3. In rag.py, write tag_question(question): fill {question} in prompts/tag.md, send it to Claude in print mode with the helper model from config/models.yaml, and return simple, multi-clause or conflicting, ignoring capital letters, spaces and full stops in the reply. If the reply is anything else, return conflicting: when unsure, go up. Make rewrite_query use the helper model from config/models.yaml too, instead of a fixed name.
+
+Test tag_question on "Can we share this with a subcontractor?" and on "How long does the NDA last?" and show me both tags.
+~~~
+
+**You should see:** two new files, \`prompts/tag.md\` and \`config/models.yaml\`, then two tags: most likely **multi-clause** for the subcontractor question and **simple** for the other. The tagger is a model, so now and then it picks a harder tag than you'd expect. That's the "go up when unsure" rule doing its job.
+
+**If it didn't work:** if both questions come back **conflicting**, the reply has extra words in it. Ask Claude Code: "Show me the raw reply from tag_question and make it read the tag correctly."
+:::
+
+:::step Let the writer answer
+Last piece: the writer from Module 1, now using the model the tag picked. Its prompt file, \`prompts/generate.md\`, holds Module 1's three rules. If you made it in Module 1's Solo tier, this step replaces it with the same text.
+
+**Where:** in Claude Code, still in your project.
+
+**Do:** paste this whole box and press Enter.
+
+~~~prompt
+Add the writer to this project.
+
+1. Create prompts/generate.md containing exactly this text (if it already exists, replace it):
+
+Answer the question using only the numbered contract chunks below.
+- Cite every claim by section and clause title, e.g. (§4.2(b) Permitted Disclosure).
+- If the chunks don't answer the question, reply exactly:
+  "The contract does not address this."
+
+Chunks:
+{chunks}
+
+Question: {question}
+
+2. In rag.py, write generate(question, chunks): number the chunks [1], [2], [3]..., each with its section, title and text, fill {chunks} and {question} in prompts/generate.md, and send it to Claude in print mode with --model set to the model config/models.yaml gives for the question's tag. Return Claude's reply.
+
+3. Change ask.py so it prints, in this order: the searches; the top 5 chunks (score, section, title); a line "Tag: <tag>, model: <model>"; then "Answer:" and the reply from generate(question, the top 3 chunks).
+
+Run it with "Can we share this with a subcontractor?" and show me the output.
+~~~
+
+**You should see:** after your **Yes** answers, the searches, the five clause lines, \`Tag: multi-clause, model: sonnet\`, and an answer along the lines of "${M02_ANSWER}" Your wording will differ. The whole run takes about half a minute, because Claude is asked three times: to rewrite, to tag and to answer.
+
+**If it didn't work:** if the answer is "The contract does not address this.", look at the top 3 clauses it printed. If ${C.permittedDisclosure.section} isn't among them, that's a retrieval miss, not a writing mistake: ask Claude Code to show you the rewrites, and check that \`data/synonyms.yaml\` matches step 3.
+:::
+
+:::step Ask your questions yourself
+**Where:** in your terminal. Leave Claude Code first: type \`/exit\` and press Enter.
+
+**Do:** run the subcontractor question, then an easy one, and compare.
+
+~~~bash
+uv run ask.py "${RUNNING_QUESTION}"
+uv run ask.py "How long does the NDA last?"
+~~~
+
+**You should see:** for the first, the searches, five clauses with ${C.permittedDisclosure.section} higher than your "before", \`Tag: multi-clause, model: sonnet\`, and a cited answer about Permitted Recipients. For the second, \`Tag: simple, model: haiku\` and an answer of two years, citing ${C.term.section} Term. Now look for ${C.contractors.section} in the first list. It's most likely not in the top 3, so the answer never mentions that contractors need written consent. Module 3 goes after it.
+
+**If it didn't work:** if a run sits silent for more than two minutes, press Ctrl and C to stop it, then check print mode on its own with \`claude -p "Say hello"\`. If that asks you to sign in, run \`claude\`, sign in again (Module 0, Part 2), and try once more.
+:::
+
+:::video m02-tag-and-answer
+:::
+
+:::step Save your work and send it to GitHub
+**Where:** in your terminal, inside \`rag-course-project\`.
+
+**Do:** run these three lines one at a time. The first picks up every new and changed file, the second **commits** them (saves a snapshot with a note), and the third **pushes** the branch to GitHub, so it's backed up.
+
+~~~bash
+git add -A
+git commit -m "Module 2: translate the question before searching"
+git push -u origin pre-retrieval
+~~~
+
+**You should see:** after the commit, a line like \`[pre-retrieval 1a2b3c4] Module 2: translate the question before searching\`. After the push, a line saying the branch \`pre-retrieval\` is set up to track \`origin/pre-retrieval\`. On GitHub, your project now has a \`pre-retrieval\` branch.
+
+**If it didn't work:** "Please tell me who you are" means Git doesn't know your name yet: do Module 1's Guided step 3, then run the commit line again. If the push asks for a username or password, your terminal isn't signed in to GitHub: run \`gh auth login\` (Module 0, Part 3) and push again.
+:::
+:::
+
+:::tier partial
+Now see why the search should look only at the contract, using a **metadata filter**.
+
+1. Start Claude Code in your project, as in Guided step 3, and ask it to create \`data/notes.md\`: three short, made-up meeting notes from Beta that use the word "subcontractor" a lot, such as "We'd like to bring in a subcontractor for the testing work."
+2. Ask it to add the notes to the index, label every chunk with its document type (\`doc_type: NDA\` for the contract's clauses, \`doc_type: notes\` for the notes), and rebuild the index. Run the subcontractor question as in Guided step 7 and count how many notes push into the top 5.
+3. Ask it to make \`retrieve()\` search only chunks whose \`doc_type\` is \`NDA\`, and to search again without the filter, printing a warning, if the filter ever matches nothing. Run the question again and compare.
+4. Delete \`data/notes.md\`, have Claude Code rebuild the index from the NDA alone (keep the filter), check the question still runs, then save and push as in Guided step 8.
+:::
+
+:::tier solo
+Grow \`data/synonyms.yaml\` to 20 everyday words the NDA says differently, such as sister company → Affiliate, secret → Confidential Information and how long → Term. Add a way to run \`ask.py\` with the synonym table alone, with no call to Claude for rewrites. For five questions about the NDA, compare the top 3 from the table alone with the top 3 from the table plus the rewrite prompt. Watch for **over-expansion**: if a word you added shows up in nearly every clause, take it out. Save and push when you're done.
+:::
+
+**Files you create:** \`data/synonyms.yaml\`, the synonym table; \`prompts/rewrite.md\`, the plain text prompt that rewrites the question; \`prompts/tag.md\`, the plain text prompt that tags it; \`config/models.yaml\`, the settings file that says which Claude model answers each tag; \`prompts/generate.md\`, the writer's prompt; and new functions in \`rag.py\`: \`rewrite_query()\`, \`tag_question()\` and \`generate()\`.
+
+**Capstone branch:** save this work on a branch called \`pre-retrieval\` in your course project. It builds on your naive-rag branch: \`rewrite_query()\` turns the question into several searches, \`retrieve()\` merges their results, \`tag_question()\` labels the question, and \`generate()\` answers with the model \`config/models.yaml\` picks for that label.
+
+**Check it with your assistant:** ask your coding assistant, "Does my pre-retrieval branch search with the original question plus its rewrites and merge the results, tag each question simple, multi-clause or conflicting (going up when unsure), and answer with the model config/models.yaml gives for the tag?"`,
     },
     {
       id: "m02-s07",
@@ -301,6 +512,8 @@ It's grounded and cited, and much closer than Module 1. But Amendment No. 1 says
     "query-rewriting", "synonym-table", "over-expansion", "metadata", "metadata-filter", "routing-tag", "tagging-prompt",
     "settings-file", "llm", "language-model", "prompt", "prompt-file", "index", "chunk", "embedding", "keyword-search",
     "grounding", "retrieval-miss", "re-rank", "cross-encoder", "function", "branch", "log",
+    "terminal", "folder", "command", "claude-code", "library", "git", "github", "commit", "push",
+    "yaml", "print-mode", "claude-models",
   ],
 
   study_guide: [

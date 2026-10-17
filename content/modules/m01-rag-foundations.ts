@@ -447,7 +447,7 @@ So this is a **retrieval miss**: the right clause existed, but the search didn't
     "disclosing-party", "receiving-party", "affiliate", "amendment", "notwithstanding", "written-consent", "signature-block",
     "rag", "language-model", "prompt", "prompt-file", "pdf", "chunk", "embedding", "vector", "cosine-similarity", "index",
     "keyword-search", "grounding", "citation", "retrieval-miss", "re-rank", "token", "function", "branch", "database",
-    "terminal", "folder", "command", "powershell", "install", "uv", "python", "library", "claude-code", "git", "github", "commit", "push",
+    "terminal", "folder", "command", "powershell", "install", "uv", "python", "library", "claude-code", "git", "github", "commit", "push", "print-mode",
   ],
 
   study_guide: [

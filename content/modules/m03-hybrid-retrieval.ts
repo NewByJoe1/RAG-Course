@@ -1,5 +1,6 @@
 import type { ModuleContent } from "../types";
 import { cite, NDA_CLAUSES as C, RUNNING_QUESTION } from "../nda";
+import { md } from "../md";
 
 // Module 3, in Module 1's lesson format, on the running example: one NDA
 // (Acme Corp and Beta Ltd) and one question, "Can we share this with a
@@ -178,17 +179,170 @@ It hands back about **40 candidates**. That's generous on purpose. At this stage
       order_index: 6,
       kind: "exercise",
       title: "Hands-on: try it yourself",
-      body_md: `**Predict first:** you'll run ten questions about the NDA through meaning search, keyword search and hybrid search. For how many will hybrid put the right clause in the top 3? And where will ${C.contractors.section} land for "${RUNNING_QUESTION}"? Write both guesses down before you start.
+      body_md: md`**Predict first:** you'll run ten questions about the NDA through meaning search, keyword search and hybrid search. For how many will hybrid put the right clause in the top 3? And where will ${C.contractors.section} land for "${RUNNING_QUESTION}"? Write both guesses down before you start.
 
-- **Guided:** Build a keyword index of the NDA next to your meaning index. Run ten questions through all three searches, including "${RUNNING_QUESTION}" and "${FOLLOW_UP}", and fill in a tally: which search put the right clause in the top 3?
-- **Partial:** Write reciprocal rank fusion yourself from its one-line rule: each clause scores the sum of 1 ÷ (60 + its rank) across the lists it appears in. Check your merged score for ${C.contractors.section} by hand.
-- **Solo:** Find a question about the NDA where keyword search alone beats hybrid. Give the keyword list more weight in the merge (multiply its points by, say, 1.5) and tune that weight until hybrid wins the question without losing any of the others.
+:::tier guided
+:::step Open your project and make this module's branch
+**Where:** in your terminal (see Module 0 if you need a reminder of how to open it).
 
-**Files you create:** \`index/\`, the folder from Module 1, which now holds your meaning index in a vector store (a database built for embeddings, such as Chroma or pgvector), and a BM25 index build script: a short Python program you run once to read every clause and build the keyword index next to it.
+**Do:** go into your project folder, then make a **branch** called \`hybrid-retrieval\` for this module. It starts from where you are now, Module 2's \`pre-retrieval\` branch, so the rewrites, the tag and the writer all come along.
 
-**Capstone branch:** save this work on a branch called \`hybrid-retrieval\` in your course project. It builds on your pre-retrieval branch and puts meaning search and BM25 keyword search, merged by reciprocal rank fusion, behind one \`retrieve()\` function that hands back about 40 candidate clauses.
+~~~bash
+cd rag-course-project
+git switch -c hybrid-retrieval
+~~~
 
-**Check it with your assistant:** ask your coding assistant, "Does my hybrid-retrieval branch run meaning search and BM25 together, merge them with reciprocal rank fusion by clause rather than by position, and return about 40 candidates from one retrieve() function?"`,
+**You should see:** \`Switched to a new branch 'hybrid-retrieval'\`.
+
+**If it didn't work:** if it says the branch already exists, you've started this before: run \`git switch hybrid-retrieval\` instead. If \`cd\` can't find the folder, open a new terminal (it starts in your home folder) and try again.
+:::
+
+:::step See where ${C.contractors.section} is now
+**Where:** in your terminal, inside \`rag-course-project\`.
+
+**Do:** ask the lawyer's sharper question from this lesson, the one that names the clause by its number. This is your "before".
+
+~~~bash
+uv run ask.py "${FOLLOW_UP}"
+~~~
+
+**You should see:** after about half a minute, Module 2's output: the searches, five clauses with scores, the tag and model, and an answer. Write down whether ${C.contractors.section} is in the five clauses, and where. Meaning search often leaves it out, because "4.5" is just a number to it.
+
+**If it didn't work:** if you see only five clause lines and no tag or answer, Module 2 isn't finished on this branch. Run \`git log --oneline -1\`: it should show "Module 2: translate the question before searching". If not, finish Module 2's Guided steps first.
+:::
+
+:::step Ask Claude Code to add keyword search
+**Keyword search** looks for the question's exact words in each clause, and **BM25** is the usual way to score it: rare words count most. A ready-made **library** called rank-bm25 does the scoring. You'll also use a simple kind of **stemming**: cutting a final "s" off longer words, so "contractor" and "contractors" count as the same word.
+
+**Where:** in Claude Code. Start it from your project folder:
+
+~~~bash
+claude
+~~~
+
+**Do:** paste this whole box and press Enter.
+
+~~~prompt
+Add keyword search next to the meaning search in this project, in Python, run with uv.
+- Add the rank-bm25 library with uv.
+- In rag.py, write words(text): lower-case the text, split it on spaces, and strip § and the punctuation , . ; : " ' ? ! from the start and end of each word, so section numbers like 4.5 and 4.2(b) stay whole. Then cut a final "s" from any word longer than three letters, so contractor and contractors count as the same word.
+- In rag.py, write keyword_search(text, k): build a BM25Okapi index once, when rag.py loads, over every chunk in index/, using words() on each chunk's section, title and text together. Return the k chunks with the highest BM25 scores, with their scores, in the same shape meaning_search returns.
+- Give rewrite_query an option use_claude, default True. When it's False, return only the question with the synonym words added, without calling Claude.
+Then, for the question "Does Section 4.5 change whether we can share with a subcontractor?" with use_claude=False, show me the top 5 from meaning_search and the top 5 from keyword_search side by side.
+~~~
+
+Claude Code asks before it changes files, adds the library or runs anything. Choose **Yes** each time.
+
+**You should see:** two short lists of five clauses each. In the keyword list, ${C.contractors.section} should be at or near the top, because "4.5" and "Section" match it exactly. In the meaning list it's lower, or missing.
+
+**If it didn't work:** if ${C.contractors.section} gets no keyword points at all, the section number was probably not included or got cut up. Ask Claude Code: "Show me what words() returns for the §4.5 chunk and for the question, and fix it so 4.5 matches."
+:::
+
+:::video m03-keyword-search
+:::
+
+:::step Combine the two searches inside retrieve()
+Now the two lists become one, with **reciprocal rank fusion**: each clause gets 1 ÷ (60 + its rank) from every list it's in, and the points are added up. All of it goes inside \`retrieve()\`, so the rest of your code doesn't change.
+
+**Where:** in Claude Code, still in your project.
+
+**Do:** paste this whole box and press Enter.
+
+~~~prompt
+Merge meaning search and keyword search with reciprocal rank fusion, inside retrieve().
+- In rag.py, write fuse(ranked_lists, k=60). Each list holds clause ids, best first; a clause's id is its section, or "Signature block". Every clause gets 1 / (60 + its rank) from each list it appears in, with ranks starting at 1, added up by clause id, so each clause appears once. Return the clauses sorted by total points, highest first, with their points.
+- Change retrieve(question, k=40, use_claude=True): call rewrite_query(question, use_claude), run meaning_search and keyword_search for every search it returns, each for the top k, fuse all those lists, and return up to k clauses with their fused points. Our NDA has only eight clauses, so it returns all of them.
+- Keep generate() reading only the top 3.
+- Change ask.py so that after the searches it prints every clause retrieve() returns, one per line: merged rank, fused points, section, title. Add "<-- §4.5" at the end of the §4.5 line. Then print the tag and model line and the answer, as before.
+Run it with "Can we share this with a subcontractor?" and show me the output.
+~~~
+
+**You should see:** the searches, then all eight clauses in one merged list with small, close-together numbers such as 0.12 (they're fusion points, not similarity scores), and an arrow marking ${C.contractors.section}. It should sit higher than it did in Module 2. The answer will most likely be the same as in Module 2, because the writer still reads only the top 3.
+
+**If it didn't work:** if a clause appears twice in the merged list, the lists are being combined by position, not by clause. Ask Claude Code: "Make fuse() add up points by clause id, so each clause appears only once."
+:::
+
+:::step Build a ten-question comparison
+One question proves little. You'll check all three kinds of search on ten questions, each with the clause that should answer it. This runs without calling Claude, so it takes seconds.
+
+**Where:** in Claude Code, still in your project.
+
+**Do:** paste this whole box and press Enter.
+
+~~~prompt
+Create compare.py, run with uv run compare.py. It checks ten questions, each with the clause that answers it:
+1. Can we share this with a subcontractor? → §4.2(b)
+2. Does Section 4.5 change whether we can share with a subcontractor? → §4.5
+3. Can our sister company see this? → §4.2(b)
+4. How long does the NDA last? → §7
+5. Which state's law governs this agreement? → §9
+6. What if a court orders us to hand the information over? → §5
+7. What counts as confidential information? → §1.1
+8. Who counts as a Permitted Recipient? → §1.4
+9. Can we tell contractors without asking first? → §4.5
+10. Who signs the agreement? → Signature block
+For each question, use rewrite_query(question, use_claude=False), then find the right clause's rank in three searches: meaning_search alone, keyword_search alone, and hybrid (fuse of the two). Print one line per question: its number, then the rank in each search, with a tick when it's in the top 3. At the end print the tally: how many of the ten each search put in the top 3. Run it and show me the output.
+~~~
+
+**You should see:** ten lines of ranks and ticks, then a tally such as "meaning 6/10, keyword 7/10, hybrid 8/10". Your numbers will differ, and with only eight clauses in the NDA they can be close. Fill in your tally on paper, and circle any question hybrid gets wrong.
+
+**If it didn't work:** if every rank is 1 or every rank is the same, compare.py is probably reading the wrong field. Ask Claude Code: "Print the full ranked list for question 1 in all three searches so I can check compare.py."
+:::
+
+:::step Run it all yourself
+**Where:** in your terminal. Leave Claude Code first: type \`/exit\` and press Enter.
+
+**Do:** run the subcontractor question, the lawyer's question from step 2, and the comparison, one line at a time.
+
+~~~bash
+uv run ask.py "${RUNNING_QUESTION}"
+uv run ask.py "${FOLLOW_UP}"
+uv run compare.py
+~~~
+
+**You should see:** for the subcontractor question, the combined list of all eight clauses with the arrow on ${C.contractors.section}: write down its rank. The answer is most likely the same as in Module 2, because ${C.contractors.section} is found now but usually isn't in the top 3 the writer reads. (With only eight clauses it sometimes makes the top 3, and then the answer mentions contractors. That's fine too.) For the lawyer's question, ${C.contractors.section} should be at or near the top, higher than your "before" from step 2. Last, the ten-question tally from step 5.
+
+**If it didn't work:** if \`compare.py\` says "No such file", Claude Code may have put it somewhere else: run \`ls\` to list your project's files, and look for it.
+:::
+
+:::video m03-compare-tally
+:::
+
+:::step Save your work and send it to GitHub
+**Where:** in your terminal, inside \`rag-course-project\`.
+
+**Do:** run these three lines one at a time. The first picks up every new and changed file, the second **commits** them (saves a snapshot with a note), and the third **pushes** the branch to GitHub, so it's backed up.
+
+~~~bash
+git add -A
+git commit -m "Module 3: keyword search and rank fusion"
+git push -u origin hybrid-retrieval
+~~~
+
+**You should see:** after the commit, a line like \`[hybrid-retrieval 1a2b3c4] Module 3: keyword search and rank fusion\`. After the push, a line saying the branch \`hybrid-retrieval\` is set up to track \`origin/hybrid-retrieval\`. On GitHub, your project now has a \`hybrid-retrieval\` branch.
+
+**If it didn't work:** "Please tell me who you are" means Git doesn't know your name yet: do Module 1's Guided step 3, then run the commit line again. If the push asks for a username or password, your terminal isn't signed in to GitHub: run \`gh auth login\` (Module 0, Part 3) and push again.
+:::
+:::
+
+:::tier partial
+Check the merge by hand, then see what the 60 is for.
+
+1. In Claude Code (started as in Guided step 3), ask it to make \`compare.py\` also print, for question 1, the meaning rank, the keyword rank and the fused points of ${C.contractors.section}. Run \`uv run compare.py\` as in Guided step 6.
+2. With a calculator, work out 1 ÷ (60 + meaning rank) + 1 ÷ (60 + keyword rank). Does it match the fused points printed?
+3. Ask Claude Code to change the 60 in \`fuse()\` to 1, run \`compare.py\` again, and compare the tally with your paper one. What happens to a clause that came first in just one list? Put the 60 back.
+4. Save and push as in Guided step 7.
+:::
+
+:::tier solo
+Find a question about the NDA where keyword search alone beats hybrid in \`compare.py\` (add one if none of the ten does). Give the keyword lists more weight in \`fuse()\`: multiply their points by, say, 1.5. Tune that weight until hybrid wins the question without losing any of the others, keep the question in \`compare.py\`, and save and push.
+:::
+
+**Files you create:** new parts of \`rag.py\`: \`words()\` and \`keyword_search()\`, the BM25 keyword search built from the same chunks as your meaning index, and \`fuse()\`, reciprocal rank fusion inside \`retrieve()\`; an updated \`ask.py\` that shows every candidate and where ${C.contractors.section} lands; and \`compare.py\`, a small program that runs ten questions through all three searches and tallies the results.
+
+**Capstone branch:** save this work on a branch called \`hybrid-retrieval\` in your course project. It builds on your pre-retrieval branch and puts meaning search and BM25 keyword search, merged by reciprocal rank fusion, behind one \`retrieve()\` function that hands back up to 40 candidate clauses.
+
+**Check it with your assistant:** ask your coding assistant, "Does my hybrid-retrieval branch run meaning search and BM25 together for every search from rewrite_query, merge them with reciprocal rank fusion by clause rather than by position, and return up to 40 candidates from one retrieve() function?"`,
     },
     {
       id: "m03-s07",
@@ -280,6 +434,7 @@ That's not a retrieval miss any more: ${C.contractors.section} was found. It's s
     "signature-block", "keyword-search", "bm25", "hybrid-search", "reciprocal-rank-fusion", "candidate", "embedding",
     "cosine-similarity", "index", "vector-store", "database", "stemming", "synonym-table", "query-rewriting", "routing-tag",
     "retrieval-miss", "re-rank", "function", "branch",
+    "terminal", "folder", "claude-code", "library", "chunk", "git", "github", "commit", "push",
   ],
 
   study_guide: [
