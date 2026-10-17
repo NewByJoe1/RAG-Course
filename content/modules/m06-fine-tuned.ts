@@ -90,7 +90,7 @@ We use three marks:
 That last kind is the most useful. A **hard negative** is a wrong clause that looks very like a right one. ${C.compelledDisclosure.section} shares the word "disclose" with the question, so it's exactly the mistake we want to train out. An easy negative, like ${C.governingLaw.section} Governing Law, teaches almost nothing, because the model already knows it's unrelated.
 
 **Where the pairs come from**
-- **The 30 pairs you wrote in Module 5.** These are the most valuable: real questions, checked by you against the NDA.
+- **The 30 pairs you wrote in Module 5**, saved in \`data/rerank_pairs.jsonl\`. These are the most valuable: real questions, checked by you against the NDA.
 - **About 200 generated pairs.** You ask a language model to write new questions for each clause, the way different people would ask them: plainly, like a lawyer, short, long. You check a sample by hand before trusting them.
 
 All of them go in a file called \`train/pairs.jsonl\`. It's a plain text file with one pair per line, so you can read it, add to it and see every change.`,

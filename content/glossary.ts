@@ -111,6 +111,13 @@ export const GLOSSARY: GlossaryTerm[] = [
     stage: null,
   },
   {
+    id: "signature-block",
+    term: "Signature block",
+    aliases: ["signature block"],
+    definition: "The part at the end of a contract where each side signs and names who signed. It holds no rules.",
+    stage: null,
+  },
+  {
     id: "notwithstanding",
     term: "Notwithstanding",
     aliases: ["Notwithstanding"],
