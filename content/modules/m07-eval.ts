@@ -133,7 +133,7 @@ ${GOLDEN_ROW}
       order_index: 4,
       kind: "concept",
       title: "Scoring two things separately",
-      body_md: `Now you need something to run the questions. That's \`evaluate.py\`, a small program you write. It reads every row of the golden set, sends each question through the whole pipeline, and scores what comes back. Then it writes the scores to \`eval/results.json\`, a plain text file you can open and compare between runs.
+      body_md: `Now you need something to run the questions. That's \`evaluate.py\`, a small program you write. It reads every row of the golden set, sends each question through the whole pipeline, and scores what comes back. Then it saves every answer to \`eval/answers.json\` and the scores to \`eval/metrics.json\`, plain text files you can open and compare between runs.
 
 It scores two things **separately**, because they break for different reasons.
 
