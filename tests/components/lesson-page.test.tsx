@@ -5,6 +5,7 @@ import { modules } from "@/content";
 import { GLOSSARY } from "@/content/glossary";
 
 vi.mock("@/app/actions/explain-back", () => ({ saveExplainBack: vi.fn() }));
+vi.mock("@/app/actions/setup", () => ({ completeSetup: vi.fn() }));
 
 let pathname = "/modules/rag-foundations";
 vi.mock("next/navigation", async (orig) => ({ ...(await orig<typeof import("next/navigation")>()), usePathname: () => pathname }));
@@ -196,6 +197,35 @@ describe("tabbed lesson: pages", () => {
   it.each(["", ...parts.map((_, i) => `part-${i + 1}`), "practice", "go-deeper", "hands-on", "glossary", "study"])("/%s renders no raw markdown", async (page) => {
     const { container } = await show(page || undefined);
     expect(container.textContent).not.toMatch(/\*\*|:::/);
+  });
+});
+
+describe("Module 0: Set up your workshop", () => {
+  const m00 = modules.find((m) => m.id === "m00")!;
+
+  it("has its parts, a glossary and 'Check your setup' as the last tab, with no quiz", async () => {
+    await show(undefined, m00);
+    const labels = tabLinks().map((a) => a.textContent?.replace(/^[✓\d]+/, ""));
+    expect(labels).toEqual(["Set up your workshop", ...m00.lesson_steps.slice(1).map((s) => s.title), "Glossary", "Check your setup"]);
+    expect(within(sidebar()).queryByRole("link", { name: /Module quiz/ })).toBeNull();
+  });
+
+  it("explains how to unlock Module 1 when a learner is sent back from it", async () => {
+    current = m00;
+    pathname = "/modules/setup";
+    render(await ModuleLayout({ params: { slug: "setup" }, children: await ModulePage({ params: { slug: "setup" }, searchParams: { locked: "rag-foundations" } }) }));
+    expect(screen.getByRole("status")).toHaveTextContent('tick "My setup works"');
+  });
+
+  it("shows the system picker on pages with Mac, Windows and Linux steps", async () => {
+    await show("part-1", m00);
+    expect(screen.getByRole("radiogroup", { name: "Your computer:" })).toBeInTheDocument();
+  });
+
+  it("ends with the 'My setup works' box", async () => {
+    await show("setup-check", m00);
+    expect(screen.getByRole("heading", { level: 1, name: "Check your setup" })).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "My setup works" })).toBeInTheDocument();
   });
 });
 
