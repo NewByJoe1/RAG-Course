@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { modules } from "@/content";
 import { moduleSchema, type ModuleContent } from "@/content/types";
 import { NDA_CLAUSES, RUNNING_QUESTION } from "@/content/nda";
-import { PIPELINE, PIPELINE_STAGE_IDS } from "@/content/pipeline";
+import { exampleFor, PIPELINE, PIPELINE_STAGE_IDS } from "@/content/pipeline";
 import { GLOSSARY } from "@/content/glossary";
 
 const m01 = modules.find((m) => m.id === "m01")!;
@@ -123,5 +123,24 @@ describe("Module 1 sets up the course", () => {
     expect(text).toContain("prompts/generate.md");
     expect(text).toContain("The contract does not address this.");
     expect(m01.failure_cases[0].retrieved_context[0].source).toMatch(/Definitions/); // "the definitions clause"
+  });
+});
+
+describe("the running example on the pipeline map", () => {
+  it("is defined from the module that first builds each stage, and only for real modules", () => {
+    for (const s of PIPELINE) {
+      const first = Math.min(...s.modules.map((m) => Number(m.slice(1))));
+      const keys = Object.keys(s.exampleAt).map((k) => Number(k.slice(1)));
+      expect(Math.min(...keys), s.id).toBe(first);
+      for (const k of Object.keys(s.exampleAt)) expect(modules.map((m) => m.id), `${s.id}.${k}`).toContain(k);
+    }
+  });
+
+  it("follows the answer from 'not addressed' (Module 1) to 'not without consent' (Module 10)", () => {
+    const gen = PIPELINE.find((s) => s.id === "generation")!;
+    expect(exampleFor(gen, "m01")!.text).toContain("does not address");
+    expect(exampleFor(gen, "m04")!.from).toBe("m02");
+    expect(exampleFor(gen, "m11")!.text).toContain("prior written consent (§4.5");
+    expect(exampleFor(PIPELINE.find((s) => s.id === "re-rank")!, "m04")).toBeNull();
   });
 });

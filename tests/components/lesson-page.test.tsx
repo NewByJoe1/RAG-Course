@@ -199,22 +199,31 @@ describe("tabbed lesson: pages", () => {
   });
 });
 
-describe("modules not yet in the lesson format", () => {
-  it("keep the single-page layout for Module 2, with no sidebar and the quiz behind a link", async () => {
-    await show(undefined, m02);
+describe("modules not in the lesson format", () => {
+  // Every module is in the lesson format now; a module without a hook still
+  // gets the single-page layout.
+  const legacy = { ...m02, hook: undefined, worked_example: [], glossary: [], study_guide: [] } as typeof m02;
+
+  it("keep the single-page layout, with no sidebar and the quiz behind a link", async () => {
+    await show(undefined, legacy);
     expect(screen.queryByRole("navigation", { name: "Lesson pages" })).toBeNull();
-    for (const s of m02.lesson_steps) expect(screen.getByRole("heading", { name: s.title })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Take the quiz →" })).toHaveAttribute("href", "/modules/pre-retrieval/quiz");
+    for (const s of legacy.lesson_steps) expect(screen.getByRole("heading", { name: s.title })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Take the quiz →" })).toHaveAttribute("href", `/modules/${legacy.slug}/quiz`);
   });
 
   it("have no tab pages", async () => {
-    current = m02;
-    await expect(LessonTabPage({ params: { slug: "pre-retrieval", page: "part-1" } })).rejects.toThrow(/NEXT_NOT_FOUND/);
+    current = legacy;
+    await expect(LessonTabPage({ params: { slug: legacy.slug, page: "part-1" } })).rejects.toThrow(/NEXT_NOT_FOUND/);
   });
+});
 
-  it.each(modules.filter((m) => !m.hook && m.id !== "m12").map((m) => [m.id, m] as const))("%s renders no raw markdown", async (_id, m) => {
-    current = m;
-    const { container } = render(await ModulePage({ params: { slug: m.slug }, searchParams: {} }));
-    expect(container.textContent).not.toMatch(/\*\*|:::/);
+describe("every module, every tab", () => {
+  const pages = ["", "part-1", "part-2", "part-3", "part-4", "part-5", "practice", "go-deeper", "hands-on", "glossary", "study"];
+  it.each(modules.filter((m) => m.id !== "m12").map((m) => [m.id, m] as const))("%s renders every tab with no raw markdown", async (_id, m) => {
+    for (const page of m.hook ? pages : [""]) {
+      const { container } = await show(page || undefined, m);
+      expect(container.textContent, `${m.id}/${page}`).not.toMatch(/\*\*|:::/);
+      cleanup();
+    }
   });
 });

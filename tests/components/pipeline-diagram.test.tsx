@@ -61,6 +61,20 @@ describe("PipelineDiagram", () => {
     expect(node(/^\[5\]/)).toHaveTextContent("Built in Module 1");
   });
 
+  it("shows the running example as of the module being read, and the finished pipeline for stages not built yet", () => {
+    render(<PipelineDiagram current={["hybrid-retrieval", "generation"]} moduleId="m01" />);
+    expect(panel()).toHaveTextContent("The subcontractor question, as of Module 1");
+    expect(panel()).toHaveTextContent("§4.2(b) ranks 5th");
+    fireEvent.click(node(/^\[4\]/));
+    expect(panel()).toHaveTextContent("Once it's built");
+    cleanup();
+    render(<PipelineDiagram current={["re-rank"]} moduleId="m05" />);
+    expect(panel()).toHaveTextContent("§4.5 jumps from 6th to 1st");
+    fireEvent.click(node(/^\[5\]/)); // built in Module 1, last changed in Module 5
+    expect(panel()).toHaveTextContent("The subcontractor question, as of Module 5");
+    expect(panel()).toHaveTextContent("muddled second route");
+  });
+
   it("previews a stage on mouse hover and returns to the pinned one on leave", async () => {
     const user = userEvent.setup();
     render(<PipelineDiagram current={["hybrid-retrieval"]} />);
