@@ -23,7 +23,7 @@ describe("beginner lesson format", () => {
     expect(messages({ ...m01, pipeline_stages: [] })).toContain("m01 has a hook, so it needs pipeline_stages");
     expect(messages({ ...m01, lesson_steps: m01.lesson_steps.slice(1) })).toContain("m01 has a hook, so it needs a warm_up lesson step first");
     const m02 = modules.find((m) => m.id === "m02")!;
-    expect(messages({ ...m02, worked_example: m01.worked_example!.map((w) => ({ ...w, id: w.id.replace("m01", "m02") })) })).toContain(
+    expect(messages({ ...m02, hook: undefined, worked_example: m01.worked_example!.map((w) => ({ ...w, id: w.id.replace("m01", "m02") })) })).toContain(
       "m02: lesson-structure fields need a hook too",
     );
   });
