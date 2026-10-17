@@ -300,7 +300,7 @@ It's grounded and cited, and much closer than Module 1. But Amendment No. 1 says
     "disclosing-party", "receiving-party", "affiliate", "amendment", "notwithstanding", "written-consent",
     "query-rewriting", "synonym-table", "over-expansion", "metadata", "metadata-filter", "routing-tag", "tagging-prompt",
     "settings-file", "llm", "language-model", "prompt", "prompt-file", "index", "chunk", "embedding", "keyword-search",
-    "grounding", "retrieval-miss", "re-rank", "cross-encoder", "function", "branch",
+    "grounding", "retrieval-miss", "re-rank", "cross-encoder", "function", "branch", "log",
   ],
 
   study_guide: [
