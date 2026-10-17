@@ -1,5 +1,6 @@
 import type { ModuleContent } from "../types";
 import { cite, NDA_CLAUSES as C, RUNNING_QUESTION } from "../nda";
+import { md } from "../md";
 
 // Module 9, rewritten on the running example. In production, the answer to the
 // subcontractor question quotes a sentence that isn't in the NDA (a
@@ -213,17 +214,190 @@ prompts:
       order_index: 6,
       kind: "exercise",
       title: "Hands-on: try it yourself",
-      body_md: `**Predict first:** if 100 questions arrive at once, half from Beta and half from another customer, how many answers do you think the Module 8 version will mix up? Write your guess down before you start.
+      body_md: md`**Predict first:** if 100 questions arrive at once, half from Beta and half from another customer, and the workers share one "current customer" setting, how many answers do you think will mix up the two customers? Write your guess down before you start.
 
-- **Guided:** Run the harness on your own computer: the gateway, the queue and two workers. Do a load test: send 100 concurrent subcontractor questions, half as Beta and half as a second test customer. Count the answers that cite the other customer's clauses. It must be zero.
-- **Partial:** Write the citation-verification gate. Test it twice: on the made-up quote ("${FAKE_QUOTE}"), which must be blocked, and on the real ${C.contractors.section} sentence copied with a line break in the middle, which must pass.
-- **Solo:** Add the kill switch. Put 20 questions in the queue, set \`serving.enabled\` to false, and show that every one of them, including those already waiting, gets the safe refusal. Write it as a test that runs in CI (continuous integration) with the rest of your eval.
+:::tier guided
+:::step Open your project and make this module's branch
+**Where:** in your terminal (see Module 0 if you need a reminder of how to open it).
 
-**Files you create:** \`config/flags.yaml\`, the flags file holding the kill switch; the gateway, with row-level security rules in the database so each customer only sees their own clauses; and \`prompts/refusal_check.md\`, the refusal-check prompt your groundedness check sends to the model.
+**Do:** go into your project folder, then make a **branch** called \`harness\` for this module. You're on Module 8's \`automation\` branch, so the new branch starts from there, with your canaries and the workflow file that runs on GitHub.
 
-**Capstone branch:** save this work on a branch called \`harness\` in your course project, with a gateway, a queue, workers, two gates, versioned prompts, a kill switch and a fallback. The course reads three numbers from it: zero answers leaked across customers, at least 100 concurrent users tested, and a kill switch test that passed.
+~~~bash
+cd rag-course-project
+git switch -c harness
+~~~
 
-**Check it with your assistant:** ask your coding assistant, "Does my harness branch keep customers apart with row-level security in the database, block any answer whose quote isn't word for word in the NDA, fail closed when a check can't run, and have every worker read serving.enabled from config/flags.yaml before each job?"`,
+**You should see:** \`Switched to a new branch 'harness'\`.
+
+**If it didn't work:** if it says the branch already exists, you've started this before: run \`git switch harness\` instead. If \`cd\` can't find the folder, open a new terminal (it starts in your home folder) and try again.
+:::
+
+:::step Build the answer gates
+**Where:** in Claude Code. Start it from your project folder:
+
+~~~bash
+claude
+~~~
+
+**Do:** a **gate** is a check every answer must pass before anyone sees it. This prompt builds the two from the lesson: **citation verification** (every quote must be in the NDA word for word) and the **groundedness check** (a second, cheaper Claude model confirms every claim is backed by a clause). If either fails, or a check can't run at all (**fail closed**), the reader gets the **fallback**: a **safe refusal** plus the clauses that were found. It also asks the writer to quote its clauses, so there's something to verify. Paste it and press Enter.
+
+~~~prompt
+Add answer gates to my pipeline, in a new file gates.py. No answer reaches the user until it passes them.
+- tidy(text): straighten curly quote marks and apostrophes, squash every run of spaces and line breaks into one space, and make it lower case.
+- quotes_are_real(answer, nda_text): find every passage in double quote marks in the answer. Each one, tidied, must appear word for word in the tidied NDA text. Return whether all of them passed, and the first one that didn't.
+- grounded(answer, clauses): write the prompt file prompts/refusal_check.md. It tells the model to list each claim in the answer with the clause that supports it, or "none", and to end with a last line of exactly SUPPORTED or UNSUPPORTED. Fill it in with the answer and the clauses, and send it with claude -p --model haiku.
+- check_gates(answer, clauses, nda_text): run citation verification first, then the groundedness check. If either fails, or anything goes wrong while checking (fail closed), return the fallback instead of the answer: "I couldn't verify this answer, so I'm not showing it. These clauses look relevant: " then each clause's section and title, then " Please read them directly." Also return which gates passed, and why one failed.
+- Add one rule to prompts/generate.md: quote the exact words of each clause you rely on, in double quote marks.
+- Running uv run gates.py checks two built-in examples with citation verification against data/nda.md, and prints PASSED or BLOCKED for each:
+  1. Made-up: §4.5 states: "${FAKE_QUOTE}"
+  2. Real: §4.5 states: "${C.contractors.text}"
+Then run uv run gates.py and show me the output.
+~~~
+
+Claude Code asks before it creates or changes a file and before it runs a command. Check it's what the prompt asked for and choose **Yes** each time.
+
+**You should see:** Claude Code creating \`gates.py\` and \`prompts/refusal_check.md\` and adding a rule to \`prompts/generate.md\`. Then two lines: the made-up quote \`BLOCKED\` and the real ${C.contractors.section} sentence \`PASSED\`. That first line is the exact quote from the lesson's story, stopped before anyone reads it.
+
+**If it didn't work:** if the real sentence is \`BLOCKED\` too, the tidying isn't the same on both sides. Paste: "The real §4.5 quote is blocked. Show me both tidied texts side by side, then fix tidy() so they match."
+:::
+
+:::step Build the harness, the kill switch and a second customer
+**Where:** in Claude Code, still in your project.
+
+**Do:** now the parts around the pipeline. To test that customers stay apart, you need a second one: a small made-up **tenant** called Gamma, with its own NDA. On your own computer there's no database with row-level security, so you build the same wall a simpler way: each customer's clauses live in their own index folder, and every job carries its customer's label, so a search can only open that customer's folder. You also get the **kill switch** in \`config/flags.yaml\`, the **flags file**. Paste this:
+
+~~~prompt
+Build a production harness around my pipeline, in a new file harness.py.
+- A second test customer: create data/customers/gamma/nda.md, a short made-up NDA between Gamma Test Co and Delta Test Ltd in the same format as data/nda.md (each clause on its own line, starting with its section number). Give it five clauses, one of which says the receiving party may share Confidential Information with subcontractors without asking. Build its index in indexes/gamma/, the same way as index/. Keep Beta's data/nda.md and index/ exactly as they are.
+- Give retrieve() a customer argument, default "beta", that decides which index it opens: beta uses index/, gamma uses indexes/gamma/. Label every clause it returns with its customer. Nothing may keep a "current customer" setting shared between questions.
+- Create config/flags.yaml containing serving: enabled: true. That's the kill switch.
+- In harness.py, a gateway function ask(question, customer) puts a job on a queue, with the customer label attached, and waits for the reply. Two worker threads take jobs off the queue one at a time. Before every job, a worker reads config/flags.yaml. If serving.enabled is false, it replies "Answering is switched off right now. Please read the contract directly." and nothing else runs. Otherwise it runs my full pipeline for that job's customer only, then check_gates() from gates.py against that customer's own NDA file, and replies.
+- Running uv run harness.py --customer beta "a question" prints the reply, then which gates passed and the customer of every clause used.
+Then run it with --customer beta and the question "Can we share this with a subcontractor?" and show me the output.
+~~~
+
+**You should see:** Claude Code creating \`data/customers/gamma/nda.md\`, \`indexes/gamma/\`, \`config/flags.yaml\` and \`harness.py\`, and changing \`retrieve()\`. The test run takes 30 seconds to a minute, because the writer and the groundedness check each call Claude. It ends with the reply, the gate results and a list of clauses that all say \`beta\`.
+
+**If it didn't work:** if any clause in the list says \`gamma\`, that's a leak, the exact bug from the lesson. Paste: "A Beta question used a Gamma clause. Find where the customer label is lost or shared, and fix it so each job carries its own."
+:::
+
+:::step Ask a question through the harness yourself
+**Where:** in your terminal. Leave Claude Code first: type \`/exit\` and press Enter.
+
+**Do:** ask the course's question the way a lawyer at Beta would, through the gateway:
+
+~~~bash
+uv run harness.py --customer beta "Can we share this with a subcontractor?"
+~~~
+
+**You should see:** after 30 seconds to a minute, one of two replies, and both mean the gates are working. Either an answer that cites ${C.contractors.section} with a quote in double quote marks, and both gates marked passed. Or the fallback, starting "I couldn't verify this answer", with a list of clauses and the gate that blocked it. The language model doesn't write the same words twice, so run it two or three times and note what you get.
+
+**If it didn't work:** if you get the fallback every time with a reason like "a check couldn't run", something in the gates crashes, and failing closed is hiding it. Start \`claude\` and paste: "The harness always fails closed. Run it once, show me the error the gates hit, and fix it."
+:::
+
+:::video m09-harness-question
+:::
+
+:::step Pull the kill switch
+**Where:** in Claude Code, then in your terminal.
+
+**Do:** start \`claude\` and paste this, to switch answering off:
+
+~~~prompt
+In config/flags.yaml, set serving.enabled to false. Change nothing else.
+~~~
+
+Type \`/exit\`, then ask the question from step 4 again:
+
+~~~bash
+uv run harness.py --customer beta "Can we share this with a subcontractor?"
+~~~
+
+Then switch answering back on. Only a person does this step, never the system itself: start \`claude\` again and paste:
+
+~~~prompt
+In config/flags.yaml, set serving.enabled back to true. Change nothing else.
+~~~
+
+**You should see:** with the switch off, an instant reply, "Answering is switched off right now. Please read the contract directly.", and no call to Claude at all. After you switch it back on, the same question gets a real reply again, as in step 4.
+
+**If it didn't work:** if the question is still answered with the switch off, the worker isn't reading the flags file before each job. Paste into Claude Code: "Workers must read serving.enabled from config/flags.yaml before every job. Please fix it."
+:::
+
+:::video m09-kill-switch
+:::
+
+:::step Test isolation, many users at once and the kill switch, without Claude
+**Where:** in Claude Code, still in your project.
+
+**Do:** the capstone needs three numbers: leaks between customers, how many **concurrent** users you tested (people asking at the same time), and whether the kill switch test passed. They're measured on GitHub, in the CI (continuous integration) run you set up in Module 8, which has no Claude login, so this test swaps every Claude call for a **stand-in**: a simple fake that needs no model. Isolation is about which clauses each job sees, so that's all it needs. The test sends 100 questions at once, a small **load test**, and the evaluation then copies the three numbers into \`eval/metrics.json\`. Paste this:
+
+~~~prompt
+Write harness_test.py, a test of the harness that needs no Claude at all, because GitHub's computer has no Claude login.
+- Use stand-ins for everything that calls Claude: skip the query rewrites and the routing tag, use a stand-in writer that answers by quoting its top clause word for word, and a stand-in groundedness check that always says supported. Everything else is the real code from harness.py and gates.py: the gateway, the queue, the workers, each customer's search, citation verification and the kill switch.
+- Isolation and load test: start 4 workers, then send 100 questions concurrently, from 100 threads at once: 50 as beta and 50 as gamma, all "Can we share this with a subcontractor?". Count a leak for every reply that used or cited a clause from the other customer.
+- Kill switch test: use a temporary copy of the flags file, never config/flags.yaml itself. Put 20 questions on the queue before any worker starts, set serving.enabled to false in the copy, then start the workers. Every one of the 20 must get the switched-off reply.
+- Print three lines: cross-tenant leaks, concurrent users tested, and kill switch test passed or failed. Write the same three values to eval/harness.json as cross_tenant_leaks, concurrent_users_tested and kill_switch_tested. End with an error (exit code 1) if there's any leak or the kill switch test failed.
+- Change eval/run.sh to run uv run harness_test.py before the evaluation, and make evaluate.py copy those three fields from eval/harness.json into eval/metrics.json, keeping 0, 0 and false if the file is missing.
+Then run uv run harness_test.py and show me the output.
+~~~
+
+**You should see:** Claude Code creating \`harness_test.py\` and changing \`eval/run.sh\` and \`evaluate.py\`. The test takes a minute or two: 100 searches, four at a time. It ends with three lines: 0 cross-tenant leaks, 100 concurrent users tested, kill switch test passed. That's what the capstone asks for.
+
+**If it didn't work:** if it finds leaks, the customer label is being shared or lost between workers, which is the bug from the lesson's story. Paste: "The harness test found leaks. Find where a customer label is shared between workers or lost, fix it so each job carries its own, and run the test again."
+:::
+
+:::step Save your work and send it to GitHub
+**Where:** in your terminal. Leave Claude Code first: type \`/exit\` and press Enter.
+
+**Do:** run these three lines one at a time. The first picks up every new and changed file, the second **commits** them (saves a snapshot with a note), and the third **pushes** the branch to GitHub, which also starts a run there.
+
+~~~bash
+git add -A
+git commit -m "Module 9: answer gates, kill switch and harness test"
+git push -u origin harness
+~~~
+
+**You should see:** after the commit, a line like \`[harness 1a2b3c4] Module 9: answer gates, kill switch and harness test\`. After the push, a line saying the branch \`harness\` is set up to track \`origin/harness\`.
+
+**If it didn't work:** if the push asks for a username or password, your terminal isn't signed in to GitHub: run \`gh auth login\` (Module 0, Part 3) and push again. "Please tell me who you are" means Git doesn't know your name yet: do Module 1's Guided step 3, then run the commit line again.
+:::
+
+:::step Check the three numbers on GitHub
+**Where:** in your terminal, inside \`rag-course-project\`.
+
+**Do:** watch the run as in Module 8 (pick the \`harness\` run if it asks), then download its results. Copy the long number from the \`ID\` column of the second command and use it in place of 1234567890.
+
+~~~bash
+gh run watch
+gh run list --workflow eval.yml --branch harness --limit 1
+gh run download 1234567890 --name eval-results --dir ci-results/harness
+cat ci-results/harness/results.json
+~~~
+
+**You should see:** the run ends with \`success\`, and the results now say \`"branch": "harness"\`, \`"cross_tenant_leaks": 0\`, \`"concurrent_users_tested": 100\` and \`"kill_switch_tested": true\`, next to your recall@3 and citation accuracy from Module 8.
+
+**If it didn't work:** if the run fails, paste \`gh run view --log-failed\` to see the error lines, as in Module 8. Copy the last 20 or so into Claude Code with "This is the error from my run on GitHub. Please fix it.", then \`git add -A\`, \`git commit -m "Module 9: fix the GitHub run"\` and \`git push\`, and check again.
+:::
+:::
+
+:::tier partial
+Now try citation verification on the cases that trip up real gates, then on real answers.
+
+1. Start Claude Code in your project, as in Guided step 2, and ask it to add three more built-in examples to \`gates.py\`: the real ${C.contractors.section} sentence with a line break between "prior written" and "consent"; the same sentence with curly quote marks and a curly apostrophe in "Party's"; and the made-up quote with one word changed. The first two must pass and the third must be blocked. If a real quote is blocked, ask Claude Code to fix the tidying, not to loosen the check.
+2. Ask it for a small script that runs citation verification over every answer saved in \`eval/answers.json\` (from Modules 7 and 8) and counts how many are blocked. It needs no model, so it's fast. Run it in your terminal, as in Guided step 4. For each blocked answer, decide: a real made-up quote, or a tidying problem?
+3. Save and send your work as in Guided step 7, with your own commit message and a plain \`git push\`.
+:::
+
+:::tier solo
+Make every answer traceable, and let the system switch itself off. Give each prompt file a **prompt version**: a hash of its contents. Have the harness write one line per answer to \`logs/answers.jsonl\`: the question, the customer, the prompt versions, the top 3 clauses, which gates passed, and whether the answer or the fallback was shown. Then add the lesson's automatic switch-off: when \`canaries.py\` from Module 8 fails, or the gates block more than 1 answer in 5 over the last 20, the system sets \`serving.enabled\` to false by itself. Nothing in your code may set it back to true: only a person, as in Guided step 5. Add both to \`harness_test.py\` so GitHub checks them on every push.
+:::
+
+**Files you create:** \`gates.py\`, citation verification, the groundedness check and the fallback; \`prompts/refusal_check.md\`, the prompt your groundedness check sends to the model; \`config/flags.yaml\`, the flags file holding the kill switch; \`harness.py\`, the gateway, the queue and the workers; \`data/customers/gamma/nda.md\` and \`indexes/gamma/\`, a second test customer kept in its own index; and \`harness_test.py\`, the test that writes the three capstone numbers to \`eval/harness.json\`.
+
+**Capstone branch:** save this work on a branch called \`harness\` in your course project, with a gateway, a queue, workers, two gates, a kill switch and a fallback. The course reads three numbers from \`results.json\`: zero answers leaked across customers, at least 100 concurrent users tested, and a kill switch test that passed.
+
+**Check it with your assistant:** ask your coding assistant, "Does my harness branch keep each customer's clauses in their own index with the customer label carried by every job, block any answer whose quote isn't word for word in that customer's NDA, fail closed when a check can't run, have every worker read serving.enabled from config/flags.yaml before each job, and test isolation, 100 concurrent users and the kill switch on GitHub without Claude?"`,
     },
     {
       id: "m09-s07",
@@ -316,6 +490,8 @@ It's less satisfying than a yes or a no. But the lawyer can read ${C.contractors
     "canary", "hallucination", "citation-verification", "tenant-isolation", "fail-closed", "scheduled-job", "cost-per-query", "p95-latency", "production",
     "harness", "gateway", "rate-limit", "queue", "worker", "concurrent", "load-test", "row-level-security", "gate",
     "groundedness-check", "safe-refusal", "fallback", "versioned-prompt", "hash", "flags-file", "log",
+    "terminal", "command", "folder", "git", "github", "commit", "push", "claude-code", "script", "workflow-file", "stand-in",
+    "eval-script", "recall-at-3", "citation-accuracy",
   ],
 
   study_guide: [

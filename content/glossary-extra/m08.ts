@@ -26,14 +26,14 @@ export const terms: GlossaryTerm[] = [
   {
     id: "github-actions",
     term: "GitHub Actions",
-    aliases: ["GitHub Actions"],
+    aliases: ["GitHub Actions", "Actions tab"],
     definition: "GitHub's built-in runner. It reads your workflow file, starts a fresh computer, runs your checks and shows pass or fail.",
     stage: "eval-guardrails",
   },
   {
     id: "workflow-file",
     term: "Workflow file",
-    aliases: [".github/workflows/eval.yml", "eval.yml", "workflow file"],
+    aliases: [".github/workflows/eval.yml", "eval.yml", "workflow file", "workflow files", "workflow", "workflows"],
     definition: "A plain text file in your project that tells GitHub which checks to run and when. Ours runs the eval on every change and every night.",
     stage: "eval-guardrails",
   },
@@ -78,5 +78,12 @@ export const terms: GlossaryTerm[] = [
     aliases: ["roll back", "rolled back", "rollback"],
     definition: "Put the last version that worked back live, quickly, while you work out what went wrong with the new one.",
     stage: null,
+  },
+  {
+    id: "artifact",
+    term: "Artifact",
+    aliases: ["artifact", "artifacts"],
+    definition: "A file a GitHub Actions run saves and keeps after it finishes. Ours is called eval-results and holds results.json, which the course reads.",
+    stage: "eval-guardrails",
   },
 ];

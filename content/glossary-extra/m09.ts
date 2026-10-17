@@ -121,4 +121,11 @@ export const terms: GlossaryTerm[] = [
     definition: "A running record the system writes as it works, such as what was asked, which prompt version answered and which checks passed.",
     stage: null,
   },
+  {
+    id: "stand-in",
+    term: "Stand-in",
+    aliases: ["stand-in", "stand-ins"],
+    definition: "A simple fake used in a test in place of the real thing, such as a writer that needs no model, so the test runs anywhere.",
+    stage: null,
+  },
 ];

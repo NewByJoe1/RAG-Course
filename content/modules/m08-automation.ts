@@ -1,5 +1,6 @@
 import type { ModuleContent } from "../types";
 import { cite, NDA_CLAUSES as C, RUNNING_QUESTION } from "../nda";
+import { md } from "../md";
 
 // Module 8, rewritten on the running example. Module 7 turned the subcontractor
 // question into a golden-set row; here that row (and evaluate.py) runs by
@@ -145,8 +146,9 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v10   # installs uv on GitHub's computer
       - name: Canary questions (any failure stops the change)
-        run: python evaluate.py --set eval/canaries.jsonl --fail-on-any
+        run: uv run canaries.py   # fails the run if any canary question fails
       - name: Full golden set
         run: bash eval/run.sh          # runs evaluate.py, writes eval/metrics.json
       - name: Check the alert rules
@@ -196,17 +198,196 @@ with open("eval/history.jsonl", "a") as f:  # one line per night
       order_index: 6,
       kind: "exercise",
       title: "Hands-on: try it yourself",
-      body_md: `**Predict first:** without automation, how many days do you think a lost ${C.contractors.section} would go unnoticed on your team? Write your guess down before you start.
+      body_md: md`**Predict first:** without automation, how many days do you think a lost ${C.contractors.section} would go unnoticed on your team? Write your guess down before you start.
 
-- **Guided:** Write \`.github/workflows/eval.yml\` so it runs \`evaluate.py\` on every change and every night. Send a small change to GitHub and watch the run go green. Then check the next morning that the nightly run happened too.
-- **Partial:** Add \`eval/canaries.jsonl\` with the subcontractor question in both wordings. Break it on purpose: remove "contractor" from the synonym table, send the change, and confirm the run goes red and names ${C.contractors.section}.
-- **Solo:** Write \`eval/alerts.py\` with the three rules (canary, a drop of more than 5 points, heartbeat). Add cost per query and p95 latency to the dashboard, then rebuild the index with a different embedding model and time how long the alert takes to reach you.
+:::tier guided
+:::step Open your project and make this module's branch
+**Where:** in your terminal (see Module 0 if you need a reminder of how to open it).
 
-**Files you create:** \`.github/workflows/eval.yml\`, your workflow file, with its nightly \`schedule\` lines (the scheduler settings); \`eval/canaries.jsonl\`, the questions that must always pass; and \`eval/alerts.py\`, the small program that compares tonight's scores with last week's and sends the alerts.
+**Do:** go into your project folder, then make a **branch** called \`automation\` for this module. You're on Module 7's \`eval\` branch, so the new branch starts from there, with your golden set and \`evaluate.py\`.
 
-**Capstone branch:** save this work on a branch called \`automation\` in your course project, with a nightly eval, a dashboard and two alerts. Leave it running: the course counts your successful nightly runs, and you need at least three.
+~~~bash
+cd rag-course-project
+git switch -c automation
+~~~
 
-**Check it with your assistant:** ask your coding assistant, "Does my automation branch run the eval in CI on every change and nightly on a schedule, fail the run when the subcontractor canary loses §4.5, and alert when a score drops more than 5 points or a nightly run is missing?"`,
+**You should see:** \`Switched to a new branch 'automation'\`.
+
+**If it didn't work:** if it says the branch already exists, you've started this before: run \`git switch automation\` instead. If \`cd\` can't find the folder, open a new terminal (it starts in your home folder) and try again.
+:::
+
+:::step See what GitHub has been running already
+**Where:** in your terminal, inside \`rag-course-project\`.
+
+**Do:** your project already has a **workflow file**, \`.github/workflows/eval.yml\`, which came with the course template. Every time you've pushed a branch, **GitHub Actions** (GitHub's built-in runner) has started a fresh computer of its own, followed that file, and run \`eval/run.sh\`. Each of those is called a **run**. Ask the GitHub CLI for the last five:
+
+~~~bash
+gh run list --workflow eval.yml --limit 5
+~~~
+
+**You should see:** a small table, newest first, one row per run: a tick (\`✓\`) for a run that passed or a cross (\`X\`) for one that failed, your commit message, the branch, the word \`push\`, a long number (the run's \`ID\`) and how long ago it ran. The newest row is probably your \`eval\` branch, with a cross. That's expected: since Module 7, \`eval/run.sh\` runs your evaluation with uv, and GitHub's computer has no uv and no Claude login. That's what this module fixes.
+
+**If it didn't work:** \`no runs found\` means GitHub hasn't run anything yet. Run \`gh browse\` to open your project in your browser, click **Actions** at the top, and if GitHub asks whether to turn workflows on, click the green button. Your next push will start a run.
+:::
+
+:::step Make the evaluation and the canaries run without Claude
+**Where:** in Claude Code. Start it from your project folder:
+
+~~~bash
+claude
+~~~
+
+**Do:** GitHub's computer can't sign in to Claude, so nothing it runs may call \`claude -p\`. Most of your pipeline needs no model at all: the synonym table, the search, cleaning and re-ranking. That's enough to measure recall@3 fresh, and recall@3 is the score that catches a lost ${C.contractors.section}. For the steps that do need Claude (the rewrites, the routing tag, the answer and the judge), GitHub reuses the copies saved in \`eval/answers.json\` the last time you ran the evaluation on your own computer. This prompt adds a \`--ci\` option that runs everything that way, and your **canary questions**: the questions that must always pass. Paste it and press Enter.
+
+~~~prompt
+GitHub's computers will run my evaluation, but they have no Claude login, so nothing there may call claude. Look at evaluate.py, eval/run.sh, eval/answers.json and the pipeline code first. Then:
+- Add a --ci option to evaluate.py that runs it the way GitHub's computer will. Nothing calls Claude: every step that normally calls claude -p (the query rewrites, the routing tag, the answer and the judge) uses the copy saved in eval/answers.json by the last normal run instead. Everything that needs no model (the synonym table, the search, cleaning and re-ranking) runs for real, so recall@3 is measured fresh, and citation accuracy is re-scored from the saved answers. Files that aren't saved in Git (check .gitignore) don't exist on GitHub, so with --ci, act as if they're missing: for example, if models/ is left out of Git, use the base re-ranker.
+- If eval/answers.json doesn't hold everything --ci needs, such as the rewrites and the tag for each question, make a normal run save it there.
+- With or without --ci, evaluate.py still writes eval/metrics.json with all five fields eval/write-results.mjs expects. Keep cross_tenant_leaks at 0, concurrent_users_tested at 0 and kill_switch_tested at false until Module 9.
+- Create eval/canaries.jsonl with exactly these two lines:
+{"question": "Can we share this with a subcontractor?", "must_be_in_top3": ["§4.5"], "must_cite": ["§4.5"]}
+{"question": "May the Receiving Party disclose to a subcontractor?", "must_be_in_top3": ["§4.5"], "must_cite": ["§4.5"]}
+- Create canaries.py. For each canary it runs the search exactly as the pipeline does (retrieve, clean, re-rank) and checks that every must_be_in_top3 section is in the top 3 clauses, and that the answer cites every must_cite section. It prints one line per canary: PASS or FAIL, the question, and the sections of the top 3. If any canary fails, it ends with an error (exit code 1). Without --ci it asks Claude for each canary's answer and saves it in eval/answers.json; with --ci it uses the saved answer and calls nothing (a canary with no saved answer is a FAIL that says to run uv run canaries.py on my computer first).
+- evaluate.py and canaries.py both save to eval/answers.json: neither may delete what the other saved.
+- Change eval/run.sh so that when the CI environment variable is "true" (GitHub sets it), it runs evaluate.py with --ci.
+Then run, one after the other: uv run canaries.py, then uv run canaries.py --ci, then uv run evaluate.py --ci. Show me the output of each.
+~~~
+
+Claude Code asks before it creates or changes a file and before it runs a command. Check it's what the prompt asked for and choose **Yes** each time.
+
+**You should see:** Claude Code reading your files, creating \`eval/canaries.jsonl\` and \`canaries.py\`, and changing \`evaluate.py\` and \`eval/run.sh\`. The first canary run asks Claude for two answers, so it takes a minute. The \`--ci\` runs are quicker, because they call no model. Each canary run ends with two lines starting \`PASS\`, each listing three sections with ${C.contractors.section} among them. The last run prints your scores: recall@3 should be close to your last Module 7 run. It can be a little lower if your fine-tuned re-ranker from Module 6 isn't saved in Git, because \`--ci\` then uses the base one, just as GitHub will.
+
+**If it didn't work:** if a canary says \`FAIL\` before you've changed anything, your search doesn't put ${C.contractors.section} in the top 3 for that wording yet, and every run on GitHub would go red. Paste this, and Claude Code fixes it and runs the canaries again:
+
+~~~prompt
+The subcontractor canary fails. Show me the top 5 clauses for that question, then make the smallest change to the synonym table or the search that puts §4.5 in the top 3, and run uv run canaries.py and uv run canaries.py --ci again.
+~~~
+:::
+
+:::step Teach the workflow file to install uv and run the canaries
+**Where:** in Claude Code, still in your project.
+
+**Do:** now change the workflow file itself, so GitHub's computer **installs** uv (the official \`astral-sh/setup-uv\` step, made by uv's authors), runs the canaries first, and only then runs the full evaluation. The course reads your scores from a file called \`results.json\` that each run saves as an **artifact** named \`eval-results\`, so those names must not change. Paste this:
+
+~~~prompt
+Update .github/workflows/eval.yml so GitHub can run my evaluation. Keep the file name, "name: eval", all three triggers (every push, the nightly schedule "17 3 * * *" and workflow_dispatch), the permissions, and the steps that write eval/results.json and upload the eval-results artifact, exactly as they are.
+- Before the evaluation, install uv with the official astral-sh/setup-uv action, using its current major version, with its cache turned on.
+- Add a step named "Canary questions" that runs uv run canaries.py --ci before the evaluation step, so a failing canary fails the whole run.
+- Keep the evaluation step running bash eval/run.sh (which now uses --ci on GitHub).
+- Check that everything the search needs on GitHub's computer is saved in Git or rebuilt by the workflow, for example index/. Tell me what you found.
+- Add a line ci-results/ to .gitignore: I'll download results from GitHub into that folder to look at them.
+Show me the finished workflow file and explain each step in one sentence.
+~~~
+
+**You should see:** the finished file, still starting \`name: eval\`. Its steps check out your code, set up uv and Node (a tool the results step uses), run \`Canary questions\`, then the evaluation, then \`Write eval/results.json\` and \`Upload eval-results\`. Each comes with a one-sentence explanation.
+
+**If it didn't work:** if Claude Code renamed the file, the \`eval-results\` artifact or \`results.json\`, the course can't find your scores. Paste this:
+
+~~~prompt
+Please put back the file name .github/workflows/eval.yml, the artifact name eval-results and the file eval/results.json exactly as they were.
+~~~
+:::
+
+:::step Save your work and send it to GitHub
+**Where:** in your terminal. Leave Claude Code first: type \`/exit\` and press Enter.
+
+**Do:** run these three lines one at a time. The first picks up every new and changed file, the second **commits** them (saves a snapshot with a note), and the third **pushes** the branch to GitHub. This push also starts a run on GitHub, with your new workflow file.
+
+~~~bash
+git add -A
+git commit -m "Module 8: run the eval on GitHub, with canary questions"
+git push -u origin automation
+~~~
+
+**You should see:** after the commit, a line like \`[automation 1a2b3c4] Module 8: run the eval on GitHub, with canary questions\`. After the push, a line saying the branch \`automation\` is set up to track \`origin/automation\`.
+
+**If it didn't work:** if the push asks for a username or password, your terminal isn't signed in to GitHub: run \`gh auth login\` (Module 0, Part 3) and push again. "Please tell me who you are" means Git doesn't know your name yet: do Module 1's Guided step 3, then run the commit line again.
+:::
+
+:::step Watch the run on GitHub
+**Where:** in your terminal, inside \`rag-course-project\`.
+
+**Do:** wait about ten seconds for GitHub to start, then paste this. It shows a run's progress live. If it asks which run to watch, pick the one for \`automation\` with the arrow keys and press Enter.
+
+~~~bash
+gh run watch
+~~~
+
+**You should see:** the run's steps, ticked off one at a time as they finish. The first run takes several minutes, because GitHub's computer downloads Python, your libraries and the models from scratch; later runs are faster. It ends with a line saying the run completed with \`success\`. Watching is optional: press Ctrl and C to stop watching, and the run carries on without you.
+
+**If it didn't work:** if the run fails, paste this to see the error lines from the step that failed:
+
+~~~bash
+gh run view --log-failed
+~~~
+
+Copy the last 20 or so lines, start \`claude\`, paste them, and add "This is the error from my run on GitHub. Please fix it." Then save and send again with \`git add -A\`, \`git commit -m "Module 8: fix the GitHub run"\` and \`git push\`, and watch the new run. If \`gh run watch\` says there are no runs in progress, the run has already finished: \`gh run list --workflow eval.yml --limit 3\` shows how it went.
+:::
+
+:::video m08-gh-run-watch
+:::
+
+:::step Look at the run and its results
+**Where:** in your web browser, then in your terminal.
+
+**Do:** first, look at the run on GitHub. This opens your project in your browser:
+
+~~~bash
+gh browse
+~~~
+
+Click **Actions** at the top of the page (that's the **Actions tab**), then click the newest run, the one with your commit message. You'll see the \`eval\` job with a green tick and, at the bottom, an **Artifacts** box holding \`eval-results\`. Click the \`eval\` job to see every step and its output, including your two canary lines.
+
+Then download the results into your terminal. The first command shows the newest run of this branch; copy the long number in its \`ID\` column and use it in place of 1234567890 in the second command.
+
+~~~bash
+gh run list --workflow eval.yml --branch automation --limit 1
+gh run download 1234567890 --name eval-results --dir ci-results
+cat ci-results/results.json
+~~~
+
+**You should see:** the results the course reads: \`"branch": "automation"\`, your \`recall_at_3\` and \`citation_accuracy\`, the three Module 9 fields still at 0, 0 and \`false\`, and \`"nightly_runs": 0\`. That last one counts runs made by the nightly schedule, and GitHub only follows the schedule on your project's \`main\` branch (more on that in the next step).
+
+**If it didn't work:** \`no artifact matches any of the names\` means that run didn't finish with a tick, or the number is from a different run: check the \`ID\` again in the first command's output. If the download says the file already exists, you've downloaded before: use \`--dir ci-results/again\` instead.
+:::
+
+:::video m08-actions-tab
+:::
+
+:::step Start tonight's run by hand
+**Where:** in your terminal, inside \`rag-course-project\`.
+
+**Do:** the line \`17 3 * * *\` in your workflow file is a **cron schedule**: it tells GitHub to start a run at 3:17 every night (on GitHub's clock, which may be a few hours off yours). GitHub follows it on your project's \`main\` branch only. Your \`main\` still has the template's version, which checks the plumbing each night; once your work reaches \`main\` for the capstone, the same schedule tests your real pipeline, and the course counts those nightly runs. To see now what a run of this branch does when nobody pushed anything, start one by hand, then watch it:
+
+~~~bash
+gh workflow run eval.yml --ref automation
+gh run watch
+~~~
+
+**You should see:** \`Created workflow_dispatch event for eval.yml at automation\`, then the same steps as before, ending with \`success\`. In \`gh run list --workflow eval.yml --limit 3\`, this run shows \`workflow_dispatch\` where the others show \`push\`. Tomorrow morning, \`gh run list --workflow eval.yml --event schedule --limit 3\` shows the night's run on \`main\`.
+
+**If it didn't work:** if \`gh run watch\` says no runs are in progress, GitHub hasn't started it yet: wait ten seconds and run \`gh run watch\` again. If the first line says the workflow can't be found, check you're inside \`rag-course-project\`.
+:::
+:::
+
+:::tier partial
+Now break the subcontractor canary on purpose, and watch GitHub catch it before anyone reads a wrong answer.
+
+1. Start Claude Code in your project, as in Guided step 3, and ask it: "In the synonym table, remove contractor from the subcontractor row. Change nothing else." Leave Claude Code and run the canaries the way GitHub does: \`uv run canaries.py --ci\`, as Claude Code did in Guided step 3.
+2. If the subcontractor canary still says \`PASS\`, your pipeline also finds ${C.contractors.section} another way (keyword search, or the saved rewrites), which is good news. To see a red run anyway, ask Claude Code to make the search leave ${C.contractors.section} out of its results for now, like the index rebuild in the lesson did.
+3. Save and send the change as in Guided step 5, with your own commit message and a plain \`git push\` (the branch is already set up). Watch it as in Guided step 6: the \`Canary questions\` step should fail and the run go red, naming ${C.contractors.section}. Check your email too: GitHub usually emails you when one of your runs fails. That's your first alert.
+4. Ask Claude Code to undo exactly what it changed in steps 1 and 2. Save, push and watch again until the run is green.
+:::
+
+:::tier solo
+Write \`eval/alerts.py\` with the lesson's other two alert rules. Rule 2: a score more than 5 points below the average of the last 7 runs. Get past scores by downloading earlier runs' \`eval-results\`, as in Guided step 7. Rule 3, the heartbeat: complain when the \`main\` branch has had no successful nightly run in the last 26 hours, using \`gh run list\` with \`--event schedule\` as in Guided step 8 (add \`--json conclusion,createdAt\` to get the answer in a form your code can read). Run it every morning from your terminal. Then add cost per query and p95 latency to your local evaluation: \`claude -p\` reports each call's cost and time when you add \`--output-format json\`. Commit and push, and check the run stays green.
+:::
+
+**Files you create:** \`.github/workflows/eval.yml\`, your workflow file, now installing uv and running the canaries before the evaluation, on every push and every night; \`eval/canaries.jsonl\`, the questions that must always pass; \`canaries.py\`, which checks them; a \`--ci\` option in \`evaluate.py\` and \`eval/run.sh\` that runs the evaluation without Claude; and in the Solo tier, \`eval/alerts.py\`, the small program that compares tonight's scores with last week's.
+
+**Capstone branch:** save this work on a branch called \`automation\` in your course project. Every push runs the workflow, and the course reads \`results.json\` from the \`eval-results\` artifact. The capstone also counts successful nightly runs on your \`main\` branch, and you need at least three.
+
+**Check it with your assistant:** ask your coding assistant, "Does my automation branch install uv in .github/workflows/eval.yml, run the canaries and the evaluation on GitHub without calling Claude, fail the run when the subcontractor canary loses §4.5, and still upload eval/results.json as the eval-results artifact?"`,
     },
     {
       id: "m08-s07",
@@ -295,6 +476,8 @@ The answer is back where Module 7 left it: "Disclosure to contractors needs the 
     "re-rank", "eval", "guardrail", "golden-set", "routing-tag", "recall-at-3", "citation-accuracy", "groundedness", "ci",
     "deploy", "alert", "dashboard", "canary", "eval-script", "answer-check", "silent-degradation", "scheduled-job", "cron",
     "github", "github-actions", "workflow-file", "cost-per-query", "cost-creep", "p95-latency", "heartbeat-alert", "alert-fatigue", "roll-back",
+    "terminal", "command", "folder", "template-repository", "git", "github-cli", "commit", "push", "uv", "python", "library", "browser",
+    "claude-code", "print-mode", "install", "prompt", "artifact", "keyword-search", "fine-tuning",
   ],
 
   study_guide: [
