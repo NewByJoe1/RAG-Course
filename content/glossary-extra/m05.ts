@@ -23,4 +23,18 @@ export const terms: GlossaryTerm[] = [
     definition: "The most time you allow for one answer, such as 2 seconds, shared out between the pipeline's stages.",
     stage: null,
   },
+  {
+    id: "sentence-transformers",
+    term: "sentence-transformers",
+    aliases: ["sentence-transformers"],
+    definition: "A free Python library for running ready-made language models that compare text, including the cross-encoder re-ranker in Module 5.",
+    stage: "re-rank",
+  },
+  {
+    id: "pytorch",
+    term: "PyTorch",
+    aliases: ["PyTorch"],
+    definition: "The free engine many AI models run on. sentence-transformers needs it, so it downloads the first time you add the re-ranker. It's large.",
+    stage: null,
+  },
 ];

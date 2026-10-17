@@ -1,5 +1,6 @@
 import type { ModuleContent } from "../types";
 import { cite, NDA_CLAUSES as C, RUNNING_QUESTION } from "../nda";
+import { md } from "../md";
 
 // Module 5, rewritten on the running example: one NDA (Acme Corp and Beta Ltd)
 // and one question, "Can we share this with a subcontractor?". Module 4 left 10
@@ -168,15 +169,145 @@ Expect a few misses. The ready-made re-ranker learned from millions of web searc
       order_index: 6,
       kind: "exercise",
       title: "Hands-on: try it yourself",
-      body_md: `**Predict first:** after re-ranking, in what place will ${C.contractors.section} land for "${RUNNING_QUESTION}"? And out of 10 questions about the NDA, how many will have their answering clause in 1st place? Write both guesses down before you start.
+      body_md: md`**Predict first:** after re-ranking, in what place will ${C.contractors.section} land for "${RUNNING_QUESTION}"? And out of 10 questions about the NDA, how many will have their answering clause in 1st place? Write both guesses down before you start.
 
-- **Guided:** Plug a ready-made cross-encoder into your pipeline, right after \`clean()\`. For the subcontractor question and 9 other questions about the NDA, write down where the answering clause sits before and after re-ranking.
-- **Partial:** Time it. Re-rank 5, 10, 20 and 40 clauses and note how long each takes. Your whole answer has a 2-second latency budget: choose how many clauses to re-rank and how many to keep, and set both in \`config/models.yaml\`.
-- **Solo:** Write 30 legal (question, clause, relevant?) pairs from the NDA. Include the subcontractor question in everyday words and in a lawyer's words, and give each question a hard negative. Score the re-ranker on them, and list every question it gets wrong. Keep the file: Module 6 trains on these pairs.
+:::tier guided
+:::step Open your project and make this module's branch
+**Where:** in your terminal (see Module 0 if you need a reminder of how to open it).
 
-**Files you create:** \`data/rerank_pairs.jsonl\`, a plain text file with one labelled pair per line, and a re-ranker entry in \`config/models.yaml\`, your settings file.
+**Do:** go into your project folder, then make a **branch** called \`rerank\` for this module. You're still on Module 4's \`post-retrieval\` branch, so the new branch starts from everything you've built so far, cleaning step included.
 
-**Capstone branch:** save this work on a branch called \`rerank\` in your course project. It needs a cross-encoder that re-ranks the clean clauses and keeps the top-k, with k set in the settings file so you can change it.
+~~~bash
+cd rag-course-project
+git switch -c rerank
+~~~
+
+**You should see:** \`Switched to a new branch 'rerank'\`.
+
+**If it didn't work:** if it says the branch already exists, you've started this before: run \`git switch rerank\` instead. If \`cd\` can't find the folder, open a new terminal (it starts in your home folder) and try again.
+:::
+
+:::step Add a ready-made re-ranker
+**Where:** in Claude Code. Start it from your project folder:
+
+~~~bash
+claude
+~~~
+
+**Do:** paste this and press Enter. It asks Claude Code to add the **sentence-transformers** library, which runs ready-made cross-encoders, and to write \`rerank()\`, which reads the question and each clause together and puts the best match first. The model's name goes in \`config/models.yaml\`, the settings file from Module 2, so you can swap it later without touching the code.
+
+~~~prompt
+Add a re-ranking step to this project, run with uv.
+- Add the sentence-transformers library with uv. If this computer runs Linux, take torch from the CPU-only PyTorch index (https://download.pytorch.org/whl/cpu), set up as a uv index, so the download stays small.
+- In config/models.yaml, add a reranker section with three settings: model: cross-encoder/ms-marco-MiniLM-L-6-v2, rerank_up_to: 10 and k: 3. Keep everything already in the file.
+- In a new file rerank.py, write rerank(question, chunks, k). It reads the model name from config/models.yaml and loads it once with CrossEncoder. It scores every (question, chunk text) pair, sorts the chunks from highest score to lowest, and returns the top k, each with its score. It prints one log line like "rerank: read 6 clauses in 0.21 s, kept 3".
+- Test it: for "Can we share this with a subcontractor?", run retrieve() and clean(), then rerank() keeping every clause, and show me each clause's place before and after re-ranking, with its score.
+~~~
+
+Claude Code asks before it creates or changes a file and before it runs a command. Check it's what the prompt asked for and choose **Yes** each time.
+
+**You should see:** a long wait the first time. uv downloads sentence-transformers and **PyTorch**, the engine it runs on: a few hundred megabytes, so allow 2 to 15 minutes depending on your connection. Then the re-ranker model itself, about 90 megabytes, downloads once. After that, the test prints the clean clauses in a new order with a score each. Depending on the library's version, scores run from 0 to 1 or are plain numbers like 7.2 and -4.5; either way, higher means a better match. ${C.contractors.section} should now be at or near the top.
+
+**If it didn't work:** if the download stops with a message about a timeout, your connection was too slow for uv's patience. Paste this, and Claude Code tries again with a longer wait:
+
+~~~prompt
+The download timed out. Set UV_HTTP_TIMEOUT to 300 and try again.
+~~~
+:::
+
+:::video m05-add-reranker
+:::
+
+:::step Put the re-ranker into your pipeline
+**Where:** in Claude Code, still in your project.
+
+**Do:** paste this and press Enter. It puts \`rerank()\` between the cleaning step and the writer, so the writer reads only the best few clauses, best first.
+
+~~~prompt
+Change ask.py so the pipeline is: retrieve() asking for up to 40 candidates, then clean(), then rerank() on the first rerank_up_to clean clauses, keeping k, with both numbers read from the reranker section of config/models.yaml, then generate() with only the clauses rerank() kept, in their new order. Keep everything ask.py prints now, and print rerank()'s log line after clean()'s log. Then run: uv run ask.py "Can we share this with a subcontractor?" and show me the output.
+~~~
+
+**You should see:** the \`clean:\` log and then the \`rerank:\` line, then three numbered clauses (that's k), then the routing tag and the answer, which takes 10 to 30 seconds. With ${C.contractors.section} first, the answer will most likely mention that disclosure to contractors needs the Disclosing Party's prior written consent. It may also offer ${C.permittedDisclosure.section} as a second route: that's the muddle Module 10 fixes.
+
+**If it didn't work:** if more or fewer than three clauses reach the writer, \`ask.py\` isn't reading k from the settings file. Paste: "ask.py should read k from the reranker section of config/models.yaml. Please fix it and run it again."
+:::
+
+:::step Make a before-and-after table for ten questions
+**Where:** in Claude Code, still in your project.
+
+**Do:** one question proves very little. Paste this to make a script, a file of Python code you run, that checks ten questions at once and shows where the clause that answers each one sits before and after re-ranking.
+
+~~~prompt
+Make a script check_rerank.py that runs each of these 10 questions through retrieve() and clean(), then rerank() keeping every clause. For each question, print one line: the question, the clause that answers it, its place after clean() and its place after rerank(). If the answering clause didn't survive clean(), print "dropped" for both places. At the end, print how many questions have their answering clause in 1st place, before and after re-ranking.
+1. Can we share this with a subcontractor? : §4.5
+2. May the Receiving Party disclose to a subcontractor? : §4.5
+3. Can we tell our outside contractors about the project? : §4.5
+4. How long does the NDA last? : §7
+5. Which state's law applies? : §9
+6. What counts as Confidential Information? : §1.1
+7. Who counts as a Permitted Recipient? : §1.4
+8. Can we share it with our Affiliates? : §4.2(b)
+9. What if a court orders us to disclose it? : §5
+10. Who signs the agreement? : Signature block
+Don't run it yet; I'll run it myself.
+~~~
+
+**You should see:** Claude Code creating \`check_rerank.py\` and saying how to run it, usually \`uv run check_rerank.py\`.
+
+**If it didn't work:** if Claude Code runs it anyway, that's fine: let it finish, then carry on with the next step.
+:::
+
+:::step Run the table and the pipeline yourself
+**Where:** in your terminal. Leave Claude Code first: type \`/exit\` and press Enter.
+
+**Do:** run the ten-question table, then the full pipeline:
+
+~~~bash
+uv run check_rerank.py
+uv run ask.py "Can we share this with a subcontractor?"
+~~~
+
+**You should see:** the table takes a minute or two, because each question goes through the whole search from Modules 2 and 3 first. It prints ten lines, each with two places, then a summary of how many answering clauses were 1st before and after. Your numbers will differ from anyone else's, and that's fine. Write down where ${C.contractors.section} lands for question 1, and the 1st-place count, and compare them with your predictions. Expect a miss or two, often question 2, asked in a lawyer's words: Module 6 trains the re-ranker on exactly that.
+
+**If it didn't work:** "No such file" means you're not in the project folder (\`cd rag-course-project\`), or Claude Code named the file differently: start \`claude\` and ask "What command runs the ten-question table?"
+:::
+
+:::video m05-before-after-table
+:::
+
+:::step Save your work and send it to GitHub
+**Where:** in your terminal, inside \`rag-course-project\`.
+
+**Do:** run these three lines one at a time. The first picks up every new and changed file, the second **commits** them (saves a snapshot with a note), and the third **pushes** the branch to GitHub, so it's backed up.
+
+~~~bash
+git add -A
+git commit -m "Module 5: re-rank the clean clauses"
+git push -u origin rerank
+~~~
+
+**You should see:** after the commit, a line like \`[rerank 1a2b3c4] Module 5: re-rank the clean clauses\`. After the push, a line saying the branch \`rerank\` is set up to track \`origin/rerank\`. On GitHub, your project now has a \`rerank\` branch.
+
+**If it didn't work:** if the push asks for a username or password, your terminal isn't signed in to GitHub: run \`gh auth login\` (Module 0, Part 3) and push again. "Please tell me who you are" means Git doesn't know your name yet: do Module 1's Guided step 3, then run the commit line again.
+:::
+:::
+
+:::tier partial
+Now time it. Say search, cleaning and re-ranking together have a 2-second latency budget, before the writer even starts, and re-ranking may use at most half a second of it.
+
+1. Start Claude Code in your project, as in Guided step 2, and ask it for a script that times \`rerank()\` on 5, 10, 20 and 40 clauses for the subcontractor question. Our NDA only has eight pieces, so let it repeat clauses to make up the bigger numbers: for timing, only the count matters. Have it run each size three times and print the middle time, because the first run also loads the model.
+2. Run the script yourself in the terminal, as in Guided step 5, and write down the four times.
+3. Choose how many clauses to re-rank (\`rerank_up_to\`) and how many to keep (\`k\`), and change both in the reranker section of \`config/models.yaml\` from Guided step 2. Run \`ask.py\` again, as in Guided step 5, to check the answer still leads with ${C.contractors.section}.
+4. Save and push your work, as in Guided step 6, with a new commit message.
+:::
+
+:::tier solo
+Write 30 legal (question, clause, relevant?) pairs from the NDA in \`data/rerank_pairs.jsonl\`, one pair per line, like the examples in this lesson. Include the subcontractor question in everyday words and in a lawyer's words, and give each question a hard negative, such as ${C.compelledDisclosure.section} for "May the Receiving Party disclose to a subcontractor?". Then ask Claude Code to score the re-ranker from Guided step 2 on your pairs: for how many questions does the relevant clause come out on top? List every question it gets wrong, and keep the file. In Module 6 you'll build a bigger set like it and train the re-ranker until it stops making those mistakes. Save and push as in Guided step 6.
+:::
+
+**Files you create:** \`rerank.py\`, with \`rerank()\`, your re-ranking step; a reranker section in \`config/models.yaml\`, your settings file, naming the model and setting how many clauses to re-rank and keep; \`check_rerank.py\`, the ten-question before-and-after table; a changed \`ask.py\` that runs search, cleaning, re-ranking and the writer in order; and, if you do the Solo task, \`data/rerank_pairs.jsonl\`, a plain text file with one labelled pair per line.
+
+**Capstone branch:** save this work on a branch called \`rerank\` in your course project. It builds on your post-retrieval branch and needs a cross-encoder that re-ranks the clean clauses and keeps the top-k, with the model and k set in the settings file so you can change them.
 
 **Check it with your assistant:** ask your coding assistant, "Does my rerank branch run after clean(), score each (question, clause) pair with a cross-encoder, keep the top k from config/models.yaml, and log how long re-ranking takes?"`,
     },
@@ -279,6 +410,8 @@ Search, cleaning and re-ranking have done their jobs: the right three clauses ar
     "language-model", "prompt", "index", "embedding", "keyword-search", "query-rewriting", "candidate",
     "deduplication", "score-threshold", "score-gap", "anchoring", "re-rank", "bi-encoder", "cross-encoder", "top-k",
     "latency", "latency-budget", "settings-file", "hard-negative", "training-pair", "fine-tuning", "log", "branch",
+    "sentence-transformers", "pytorch", "routing-tag", "terminal", "folder", "command", "claude-code", "script", "python", "library", "uv",
+    "git", "github", "commit", "push",
   ],
 
   study_guide: [

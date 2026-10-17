@@ -1,5 +1,6 @@
 import type { ModuleContent } from "../types";
 import { cite, NDA_CLAUSES as C, RUNNING_QUESTION } from "../nda";
+import { md } from "../md";
 
 // Module 4, rewritten on the running example: one NDA (Acme Corp and Beta Ltd)
 // and one question, "Can we share this with a subcontractor?". Module 3 left
@@ -177,17 +178,153 @@ Question: {question}`,
       order_index: 6,
       kind: "exercise",
       title: "Hands-on: try it yourself",
-      body_md: `**Predict first:** of the 40 candidates for "${RUNNING_QUESTION}", how many do you think will survive all three cleaners? And in what place will ${C.contractors.section} end up? Write both guesses down before you start.
+      body_md: md`**Predict first:** in the lesson, search hands over about 40 candidates for "${RUNNING_QUESTION}" and cleaning keeps 10. Your practice NDA is much shorter, seven clauses and a signature block, so your numbers will be smaller. How many candidates do you think your search will hand over, how many will survive the three cleaners, and in what place will ${C.contractors.section} end up? Write your guesses down before you start.
 
-- **Guided:** Run the subcontractor question through your \`retrieve()\` function from Module 3 and print all the candidates. Then run the three cleaners one at a time, and write down the count after each step and where ${C.contractors.section} sits.
-- **Partial:** Choose the score threshold yourself. Print the scores from highest to lowest, find the score gap, and put the cut in the middle of it. Then check the same cut on two more questions about the NDA, and make sure the clause that answers each one survives.
-- **Solo:** Module 2's synonym table makes search look for "third party", "Permitted Recipient" and "contractor" as well as "subcontractor", so the same clauses come back several times. Fix the duplicates at the right stage, then write two sentences on why you didn't fix them in pre-retrieval instead.
+:::tier guided
+:::step Open your project and make this module's branch
+**Where:** in your terminal (see Module 0 if you need a reminder of how to open it).
 
-**Files you create:** \`prompts/compress.md\`, an optional prompt file that asks a small model to cut a clause down to its useful sentences, word for word.
+**Do:** go into your project folder, then make a **branch** called \`post-retrieval\` for this module. You're still on Module 3's \`hybrid-retrieval\` branch, so the new branch starts from everything you've built so far.
 
-**Capstone branch:** save this work on a branch called \`post-retrieval\` in your course project. It needs a \`clean()\` step that sits between \`retrieve()\` and \`generate()\` and logs its counts before and after each cleaner.
+~~~bash
+cd rag-course-project
+git switch -c post-retrieval
+~~~
 
-**Check it with your assistant:** ask your coding assistant, "Does my post-retrieval branch remove near-duplicates above 0.95, cut weak matches at the score gap, trim only at full stops, log the counts at each step, and hand about 10 clauses on?"`,
+**You should see:** \`Switched to a new branch 'post-retrieval'\`.
+
+**If it didn't work:** if it says the branch already exists, you've started this before: run \`git switch post-retrieval\` instead. If \`cd\` can't find the folder, open a new terminal (it starts in your home folder) and try again.
+:::
+
+:::step Look at what search hands over
+**Where:** in Claude Code. Start it from your project folder:
+
+~~~bash
+claude
+~~~
+
+**Do:** paste this and press Enter. It asks Claude Code for a small **script** (a file of Python code you run) that shows every candidate your \`retrieve()\` from Module 3 hands over, before any cleaning.
+
+~~~prompt
+Make a script candidates.py so that running: uv run candidates.py "a question" calls retrieve() from rag.py, asking for up to 40 candidates, and prints how many came back, then one line per candidate, in the order retrieve() returns them: place, score, section, title. Don't change rag.py. Then run it with the question "Can we share this with a subcontractor?" and show me the output.
+~~~
+
+Claude Code asks before it creates a file or runs a command. Check it's what the prompt asked for and choose **Yes** each time.
+
+**You should see:** a count, such as \`8 candidates\`, then one line per candidate. Our practice NDA has only eight pieces (seven clauses and the signature block), so expect about eight lines, not the lesson's 40. A real contract has many more clauses, and cleaning works the same way on them. Find ${C.contractors.section} Contractors in the list and write down its place.
+
+**If it didn't work:** if it stops with an error it doesn't fix by itself, copy the error, paste it back into Claude Code, and add "Please fix this."
+:::
+
+:::step Build the cleaning step
+**Where:** in Claude Code, still in your project.
+
+**Do:** paste this and press Enter. It describes the three cleaners from this lesson, in order. It also asks for a **log**: a few lines the code prints as it works, so you can see what each cleaner removed and why.
+
+~~~prompt
+Add a cleaning step to this project, in a new file clean.py, run with uv.
+Write clean(question, candidates, max_keep=10). It takes the candidates that retrieve() returns and does three things, in this order:
+1. Remove near-duplicates. Embed each candidate's text with fastembed and BAAI/bge-small-en-v1.5, the same model as the index. Go through the candidates longest text first, and drop any candidate whose cosine similarity with one already kept is above 0.95.
+2. Drop weak matches. Give each remaining candidate a meaning score: the cosine similarity between the question's embedding and its text's embedding. Sort the scores from highest to lowest and find the score gap: the biggest drop between two neighbouring scores, looking only at the drops after the 5th score, so at least 5 candidates always stay (with 5 or fewer, drop none). Set the threshold in the middle of that gap and drop every candidate below it. Then keep at most max_keep.
+3. Trim. Split each clause into sentences at full stops only. If a clause has more than 2 sentences and isn't a definition (a definition starts with a quoted term followed by "means"), keep only the 2 sentences closest in meaning to the question, word for word, in their original order. Never cut inside a sentence.
+Keep the candidates that stay in the order retrieve() gave them, and don't change rag.py.
+As it works, clean() prints a log: first one line like "clean: 8 -> 8 -> 6 candidates, about 450 -> 330 tokens" (count tokens as words x 4 / 3), then the threshold and the two scores of the gap it sits in, then one line for every candidate it removed or trimmed, with its section and the reason.
+Then run clean() on the candidates for "Can we share this with a subcontractor?" and show me the log and the clauses it keeps, in order.
+~~~
+
+**You should see:** Claude Code creating \`clean.py\` and asking to run it (choose **Yes**), then the log. Its first line has three counts: candidates before cleaning, after removing near-duplicates, and after dropping weak matches, such as \`clean: 8 -> 8 -> 6 candidates\`. With our short NDA, the near-duplicate cleaner usually finds nothing to remove (every clause is different) and the trimmer leaves every clause whole (each is one sentence). That's correct. The weak-match cleaner should remove one to three clauses, often the signature block. Check that ${C.contractors.section} is still in the kept list.
+
+**If it didn't work:** if ${C.contractors.section} was dropped, the gap fell above it for this question. Paste this, and Claude Code moves the cut lower:
+
+~~~prompt
+§4.5 was dropped. Only look for the gap after the 6th score instead of the 5th, and run it again.
+~~~
+:::
+
+:::step Check that copies get caught
+**Where:** in Claude Code, still in your project.
+
+**Do:** in a full-size project, search often hands over the same clause two or three times. Your NDA gives no copies, so make some on purpose and check \`clean()\` catches them. Paste this and press Enter:
+
+~~~prompt
+Make a script try_clean.py that gets the candidates for "Can we share this with a subcontractor?" from retrieve(), then adds two copies of the §4.2(b) candidate to the end of the list: one exact copy, and one with only its final full stop removed. Print how many candidates there are now, run clean() on them, and show me the log.
+~~~
+
+**You should see:** a first count two higher than before, such as \`clean: 10 -> 8 -> 6 candidates\`, and two lines saying a copy of ${C.permittedDisclosure.section} was removed as a near-duplicate. The copies score about 1.00 against the original, well above the 0.95 cut-off, so the near-duplicate cleaner removes them before the other cleaners even see them.
+
+**If it didn't work:** if the copies are still there after cleaning, paste: "The copies of §4.2(b) weren't removed. Check that clean() compares each candidate with the ones already kept, using cosine similarity above 0.95, and fix it."
+:::
+
+:::video m04-build-clean
+:::
+
+:::step Put the cleaning step into your pipeline
+**Where:** in Claude Code, still in your project.
+
+**Do:** paste this and press Enter. It puts \`clean()\` between search and the writer, so the writer only reads what survives.
+
+~~~prompt
+Change ask.py so the pipeline is: retrieve() asking for up to 40 candidates, then clean(), then generate() with only the clauses clean() kept, in that order. Keep everything ask.py prints now (the clauses, the routing tag and the answer), and print clean()'s log before the clauses. Then run: uv run ask.py "Can we share this with a subcontractor?" and show me the output.
+~~~
+
+**You should see:** the \`clean:\` log, then the numbered clauses that reach the writer, then the routing tag and the answer. The answer takes 10 to 30 seconds, because Claude writes it through \`claude -p\`, as in Module 2. Look at where ${C.contractors.section} sits in the numbered list and whether the answer mentions it. Cleaning decides which clauses the writer reads, not their order, so the writer may still lean on whatever comes first. Module 5 fixes the order.
+
+**If it didn't work:** if nothing happens for more than two minutes, press Esc to stop it, then paste: "ask.py seems stuck while writing the answer. Run generate() once on its own with a short question, find what's wrong and fix it."
+:::
+
+:::step Run it yourself and read the log
+**Where:** in your terminal. Leave Claude Code first: type \`/exit\` and press Enter.
+
+**Do:** run the pipeline with the course's question, then with a second question about the NDA:
+
+~~~bash
+uv run ask.py "Can we share this with a subcontractor?"
+uv run ask.py "How long does the NDA last?"
+~~~
+
+**You should see:** for each question, a \`clean:\` line first, then the clauses and the answer. For the subcontractor question, write down the three counts, the threshold and the place of ${C.contractors.section} among the clauses that reach the writer, and compare them with your prediction. For the second question, check that ${C.term.section} Term survived the cleaning.
+
+**If it didn't work:** "No such file" means you're not in the project folder (\`cd rag-course-project\`). If there's no \`clean:\` line, start \`claude\` again and ask "Does ask.py call clean() and print its log? If not, please fix it."
+:::
+
+:::video m04-read-clean-log
+:::
+
+:::step Save your work and send it to GitHub
+**Where:** in your terminal, inside \`rag-course-project\`.
+
+**Do:** run these three lines one at a time. The first picks up every new and changed file, the second **commits** them (saves a snapshot with a note), and the third **pushes** the branch to GitHub, so it's backed up.
+
+~~~bash
+git add -A
+git commit -m "Module 4: clean the candidates before the writer"
+git push -u origin post-retrieval
+~~~
+
+**You should see:** after the commit, a line like \`[post-retrieval 1a2b3c4] Module 4: clean the candidates before the writer\`. After the push, a line saying the branch \`post-retrieval\` is set up to track \`origin/post-retrieval\`. On GitHub, your project now has a \`post-retrieval\` branch.
+
+**If it didn't work:** if the push asks for a username or password, your terminal isn't signed in to GitHub: run \`gh auth login\` (Module 0, Part 3) and push again. "Please tell me who you are" means Git doesn't know your name yet: do Module 1's Guided step 3, then run the commit line again.
+:::
+:::
+
+:::tier partial
+Now choose the score threshold yourself, instead of letting \`clean()\` find the gap.
+
+1. Start Claude Code in your project, as in Guided step 2, and ask it to make \`clean()\` print every candidate's meaning score, highest first, and to use a fixed threshold, \`THRESHOLD\` at the top of \`clean.py\`, instead of finding the gap by itself. It should still keep at least 5 candidates.
+2. Run the subcontractor question, as in Guided step 6. Find the score gap in the printed scores yourself, and set \`THRESHOLD\` in the middle of it.
+3. Check the same threshold on two more questions: "Does the NDA cover our Affiliates?" (answered by ${C.permittedDisclosure.section}) and "How long does the NDA last?" (answered by ${C.term.section}). If either answering clause is dropped, move the threshold and try all three again.
+4. Save and push your work, as in Guided step 7, with a new commit message.
+:::
+
+:::tier solo
+Module 2's synonym table makes search look for "third party", "Permitted Recipient" and "contractor" as well as "subcontractor". When each search's results are simply added to one list, without merging, the same clause comes back several times. Ask Claude Code for a test version of search that does exactly that, run \`clean()\` on its results, and read the near-duplicate count in the log (as in Guided step 4). Then put search back as it was, and write two sentences on why you remove those copies in post-retrieval rather than in pre-retrieval. To go further, write \`prompts/compress.md\` from this lesson and add an option to trim long clauses with it, through \`claude -p --model haiku\`. Save and push as in Guided step 7.
+:::
+
+**Files you create:** \`clean.py\`, with \`clean()\`, your cleaning step; \`candidates.py\` and \`try_clean.py\`, two small scripts that show what search hands over and test the near-duplicate cleaner; a changed \`ask.py\` that runs search, cleaning and the writer in order; and, if you do the Solo task, \`prompts/compress.md\`, an optional prompt file that asks a small model to cut a clause down to its useful sentences, word for word.
+
+**Capstone branch:** save this work on a branch called \`post-retrieval\` in your course project. It builds on your hybrid-retrieval branch and needs a \`clean()\` step that sits between \`retrieve()\` and \`generate()\` and logs its counts before and after each cleaner.
+
+**Check it with your assistant:** ask your coding assistant, "Does my post-retrieval branch remove near-duplicates above 0.95, cut weak matches at the score gap, trim only at full stops, log the counts at each step, and hand at most 10 clauses on?"`,
     },
     {
       id: "m04-s07",
@@ -300,6 +437,7 @@ That's better than before: it quotes the whole of ${C.permittedDisclosure.sectio
     "language-model", "prompt", "prompt-file", "compression-prompt", "token", "index", "embedding", "cosine-similarity",
     "keyword-search", "reciprocal-rank-fusion", "synonym-table", "query-rewriting", "candidate", "retrieval-miss",
     "deduplication", "score-threshold", "score-gap", "lost-in-the-middle", "trimming", "re-rank", "function", "log", "branch",
+    "routing-tag", "print-mode", "terminal", "folder", "command", "claude-code", "script", "python", "git", "github", "commit", "push",
   ],
 
   study_guide: [
