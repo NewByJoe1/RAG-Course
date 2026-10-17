@@ -1,5 +1,6 @@
 import type { ModuleContent } from "../types";
 import { cite, NDA_CLAUSES as C, RUNNING_QUESTION } from "../nda";
+import { md } from "../md";
 
 // Module 6, rewritten on the running example. Module 5's re-ranker put §4.5
 // first for the plain question; asked in a lawyer's words ("May the Receiving
@@ -174,17 +175,198 @@ reranker:
       order_index: 6,
       kind: "exercise",
       title: "Hands-on: try it yourself",
-      body_md: `**Predict first:** how many points do you think fine-tuning will add on the held-out pairs? And for "${LAWYER_QUESTION}", which clause will the tuned re-ranker put first? Write both guesses down before you start.
+      body_md: md`**Predict first:** how many points do you think fine-tuning will add on the held-out pairs? And for "${LAWYER_QUESTION}", which clause will the tuned re-ranker put first? Write both guesses down before you start.
 
-- **Guided:** Put 20% of your pairs aside as the held-out set, then train the re-ranker on the 30 pairs from Module 5 plus the generated ones. Read the loss curve and say at which epoch training should have stopped. Compare base and tuned on the held-out pairs and on both wordings of the subcontractor question.
-- **Partial:** Ask a language model to write 100 more questions in the words your team actually uses, and add a hard negative for each (${C.compelledDisclosure.section} for every "disclose" question is a good start). Check a sample by hand, retrain, and compare. Did the held-out score move?
-- **Solo:** Try the cheaper fix properly instead: change \`prompts/rewrite.md\` so the rewrite turns lawyer's words into everyday ones before re-ranking. Measure it the same way. Which was the better investment, the rewrite prompt or fine-tuning? Argue it with numbers.
+:::tier guided
+:::step Open your project and make this module's branch
+**Where:** in your terminal (see Module 0 if you need a reminder of how to open it).
 
-**Files you create:** \`train/pairs.jsonl\`, your training pairs, one per line; \`models/reranker-v2/\`, the folder holding the fine-tuned re-ranker; and the re-ranker setting in \`config/models.yaml\`.
+**Do:** go into your project folder, then make a **branch** called \`fine-tuned\` for this module. A branch is a named copy of your code. You're on Module 5's \`rerank\` branch, so the new one starts from your Module 5 work.
+
+~~~bash
+cd rag-course-project
+git switch -c fine-tuned
+~~~
+
+**You should see:** \`Switched to a new branch 'fine-tuned'\`.
+
+**If it didn't work:** if it says the branch already exists, you've started this before: run \`git switch fine-tuned\` instead. If \`cd\` can't find the folder, open a new terminal (it starts in your home folder) and try again.
+:::
+
+:::step See the problem with a lawyer's wording
+**Where:** in your terminal, inside \`rag-course-project\`.
+
+**Do:** ask your pipeline the subcontractor question the way Beta's lawyer words it, then the everyday way. Run the two lines one at a time:
+
+~~~bash
+uv run ask.py "${LAWYER_QUESTION}"
+uv run ask.py "${RUNNING_QUESTION}"
+~~~
+
+**You should see:** for each, after up to a minute, the clauses your re-ranker kept, the routing tag and an answer. Write down which clause is listed first for each wording. In the lesson, the lawyer's wording put ${C.compelledDisclosure.section} Compelled Disclosure first, a clause about court orders, while the everyday wording put ${C.contractors.section} first. Your lists may differ a little; what matters is whether ${C.contractors.section} comes first.
+
+**If it didn't work:** "No such file" means you're not in the project folder: run \`cd rag-course-project\` first. If \`ask.py\` stops with an error, start \`claude\`, paste the error and add "Please fix this."
+:::
+
+:::step Write the training pairs
+**Where:** in Claude Code. Start it from your project folder:
+
+~~~bash
+claude
+~~~
+
+**Do:** a **training pair** is one question, one clause and a mark saying how well the clause answers it. Copy the whole box below, paste it into Claude Code and press Enter. It asks Claude Code to write about 100 pairs from the NDA and to put a fifth of the questions aside as your **held-out** set, which training never sees, so you can test fairly.
+
+~~~prompt
+Read data/nda.md. I want training pairs to fine-tune our re-ranker. Write them in two new files, one pair per line, each line like this:
+{"question": "May the Receiving Party disclose to a subcontractor?", "clause": "§4.5", "label": 1.0}
+- "clause" is the section exactly as it starts its paragraph in data/nda.md (§1.1, §1.4, §4.2(b), §4.5, §5, §7, §9) or "Signature block".
+- "label" is 1.0 if the clause answers the question, 0.5 if it helps but doesn't settle it, and 0.0 if it's the wrong clause.
+- Write 25 different questions someone at Beta might ask about this NDA, in different styles: plain words, a lawyer's words, short, long. Never put a section number or a clause title in a question.
+- Include these two questions: "Can we share this with a subcontractor?" and "May the Receiving Party disclose to a subcontractor?". For both: §4.5 is 1.0, §4.2(b) and §1.4 are 0.5, §5 is 0.0, and §1.1 is 0.0.
+- Give every question exactly 4 pairs: the clause that answers it (1.0); a clause that helps (0.5), or another wrong clause (0.0) if none helps; a hard negative (0.0), which is a wrong clause that shares words with the question; and one more wrong clause (0.0). For every question that says "disclose" or "disclosure" but isn't about a court order or the law, the hard negative is §5.
+- Split by question: put 20 questions in train/pairs.jsonl (the training pairs) and the other 5 in train/heldout.jsonl (the held-out set). Keep both subcontractor questions in train/pairs.jsonl. Rewordings of the same question go in the same file, and no question may appear in both files.
+When you're done, tell me how many lines each file has, and how many pairs have each label.
+~~~
+
+Claude Code asks before it creates or changes a file. When it asks, check it's the file you expected and choose **Yes**.
+
+**You should see:** Claude Code reading \`data/nda.md\`, then creating the two files. It ends with the counts: about 80 lines in \`train/pairs.jsonl\` and about 20 in \`train/heldout.jsonl\`, with a mix of 1.0, 0.5 and 0.0 labels, mostly 0.0.
+
+**If it didn't work:** if the counts are far off, or there are almost no 0.0 labels, paste this:
+
+~~~prompt
+Please check that train/pairs.jsonl and train/heldout.jsonl follow every rule in my last message, and fix them.
+~~~
+:::
+
+:::step Check a sample by hand
+**Where:** in Claude Code, still in your project.
+
+**Do:** never train on pairs you haven't looked at. Paste this:
+
+~~~prompt
+Show me 10 pairs picked at random from train/pairs.jsonl, as a numbered list: the question, the clause's section and title, and the label. Don't change anything.
+~~~
+
+For each one, ask yourself: does that clause answer the question (1.0), help (0.5) or not (0.0)? If you're not sure, ask Claude Code to show you that clause's text from \`data/nda.md\`. If a label looks wrong, tell Claude Code, for example: "Pair 4 should be 0.0. Please fix it in the file."
+
+**You should see:** ten pairs, nearly all with labels you agree with. Every "disclose" question should have ${C.compelledDisclosure.section} marked 0.0 somewhere in the file.
+
+**If it didn't work:** if several labels look wrong, the pairs aren't ready to train on. Paste this:
+
+~~~prompt
+Several labels are wrong. Please re-check every pair in train/pairs.jsonl and train/heldout.jsonl against data/nda.md, fix them, and list what you changed.
+~~~
+:::
+
+:::step Train the re-ranker
+**Where:** in Claude Code, still in your project.
+
+**Do:** copy the whole box, paste it into Claude Code and press Enter. It writes \`train_reranker.py\`, a **script** (a small program) that **fine-tunes** your re-ranker: it starts from the ready-made model you downloaded in Module 5 and trains it a little more on your pairs.
+
+~~~prompt
+Write train_reranker.py, run with uv, to fine-tune our re-ranker on train/pairs.jsonl.
+- Start from the same ready-made cross-encoder that rerank() uses now (its name is in config/models.yaml), loaded with the sentence-transformers library's CrossEncoder.
+- Look up each pair's clause text in data/nda.md by its section. The model reads the question and the clause text together, and the label is the score it should learn.
+- Write the training loop yourself with PyTorch, which came with sentence-transformers, so no new libraries are needed. Use binary cross-entropy loss on the model's raw score, AdamW with learning rate 0.00003, shuffled batches of 8 pairs, 3 epochs and random seed 42. Run on the computer's processor: it must work on an ordinary laptop.
+- Before training and after each epoch, measure two things on train/heldout.jsonl, which must never be trained on: the held-out loss, and the held-out score. The held-out score is a percentage: for each held-out question, compare every two of its pairs that have different labels, and count it right if the higher label got the higher score.
+- Print a table with one line per epoch: epoch, training loss, held-out loss, held-out score. Epoch 0 is the ready-made model before any training.
+- Save to models/reranker-v2/ the epoch (1 to 3) with the best held-out score, and at the end print which epoch was kept.
+- Add models/ to .gitignore: the trained model is too big to send to GitHub, and this script can rebuild it.
+Then run uv run train_reranker.py and show me the table.
+~~~
+
+**You should see:** Claude Code asking permission to create files and run commands: choose **Yes** each time. There's no big download this time, because the ready-made re-ranker is already on your computer from Module 5. Training takes one to five minutes. It ends with a table of four lines, epochs 0 to 3. **Loss** is a number for how wrong the model's scores are, so lower is better. Both losses should fall after epoch 0. If the held-out loss rises at epoch 2 or 3, that's the moment training should have stopped (overfitting), and why the script keeps the best epoch, not the last. Write down the epoch it kept and its held-out score.
+
+**If it didn't work:** if it stops with an error it doesn't fix by itself, copy the error, paste it back, and add "Please fix this." If training runs for more than 15 minutes, press Esc and paste: "Training is too slow on my computer. Please use batches of 4 and 2 epochs."
+:::
+
+:::video m06-train-reranker
+:::
+
+:::step Add the switch between base and tuned
+**Where:** in Claude Code, still in your project.
+
+**Do:** you now have two re-rankers: the **base model** you downloaded, and your fine-tuned one in \`models/reranker-v2/\`. A **feature flag** is one setting that picks between them, so you can compare them and switch back in seconds without changing any code. Paste this:
+
+~~~prompt
+Add a feature flag for the re-ranker.
+- In config/models.yaml, put the re-ranker settings under "reranker:" with "use: tuned", "base:" set to the ready-made model name that's there now, and "tuned: models/reranker-v2". Keep any other re-ranker settings, such as how many clauses to keep.
+- Make rerank() load the model that "use:" names. If "use" is tuned but the folder models/reranker-v2 doesn't exist (for example on a fresh copy of the project), print a warning and use the base model.
+- Write compare_rerankers.py, run with uv. It loads both re-rankers and prints: the held-out score of each on train/heldout.jsonl, measured the same way as train_reranker.py; then, for "Can we share this with a subcontractor?" and for "May the Receiving Party disclose to a subcontractor?", the top 3 clauses each re-ranker picks (section, title, score), both from the same candidates, found with retrieve() and clean() the way ask.py finds them.
+Then run uv run compare_rerankers.py and show me the output.
+~~~
+
+**You should see:** Claude Code changing \`config/models.yaml\` and your re-ranking code, creating \`compare_rerankers.py\`, and running it (it asks first: choose **Yes**). The output has two held-out scores, base and tuned, then a top 3 from each re-ranker for each wording.
+
+**If it didn't work:** if it says it can't find \`models/reranker-v2\`, the training in step 5 didn't save a model. Paste this:
+
+~~~prompt
+Run train_reranker.py again and make sure it saves the kept epoch to models/reranker-v2/.
+~~~
+:::
+
+:::step Compare base and tuned yourself
+**Where:** in your terminal. Leave Claude Code first: type \`/exit\` and press Enter.
+
+**Do:** run the comparison, then ask the lawyer's question again through the whole pipeline, now with the tuned re-ranker:
+
+~~~bash
+uv run compare_rerankers.py
+uv run ask.py "${LAWYER_QUESTION}"
+~~~
+
+**You should see:** the same comparison as before, then the pipeline's clauses and answer. Write down three things and check them against your predictions: the held-out score for base and for tuned; which clause each re-ranker puts first for the lawyer's wording; and which clause the answer now starts from. In the lesson, tuning lifted the held-out score and moved ${C.contractors.section} to first place. With only 100 pairs, your gain may be smaller, or ${C.contractors.section} may still miss first place. That's a real result, not a mistake: write it down, because the next part, with less help, adds more pairs.
+
+**If it didn't work:** if both re-rankers give exactly the same scores, the flag isn't being read: start \`claude\` and paste this:
+
+~~~prompt
+Why do both re-rankers give the same scores? Check that rerank() and compare_rerankers.py read "use:" from config/models.yaml, and fix it.
+~~~
+:::
+
+:::video m06-compare-rerankers
+:::
+
+:::step Save your work and send it to GitHub
+**Where:** in your terminal, inside \`rag-course-project\`.
+
+**Do:** run these three lines one at a time. The first picks up every new and changed file, the second **commits** them (saves a snapshot with a note), and the third **pushes** the branch to GitHub, so it's backed up. The trained model itself stays on your computer, because \`.gitignore\` (a list of files Git should leave out) now names the \`models/\` folder; \`train_reranker.py\` can always rebuild it.
+
+~~~bash
+git add -A
+git commit -m "Module 6: fine-tuned re-ranker behind a feature flag"
+git push -u origin fine-tuned
+~~~
+
+**You should see:** after the commit, a line like \`[fine-tuned 1a2b3c4] Module 6: fine-tuned re-ranker behind a feature flag\`. After the push, a line saying the branch \`fine-tuned\` is set up to track \`origin/fine-tuned\`. On GitHub, your project now has a \`fine-tuned\` branch.
+
+**If it didn't work:** if the push is refused because a file is larger than GitHub allows, the model folder slipped in. Start \`claude\` and paste this, then run the push line again:
+
+~~~prompt
+My push failed because the models/ folder was committed. Add models/ to .gitignore and take it out of my last commit, keeping the files on my computer.
+~~~
+:::
+:::
+
+:::tier partial
+Now teach the re-ranker your team's own words, and watch for overfitting.
+
+1. Start Claude Code in your project, as in Guided step 3, and ask it to write 15 more questions the way your team really talks, each with 4 pairs and a hard negative (${C.compelledDisclosure.section} for every "disclose" question is a good start). Add them to \`train/pairs.jsonl\` only, and leave \`train/heldout.jsonl\` exactly as it is, so the comparison stays fair. Check a sample, as in Guided step 4.
+2. Ask Claude Code to let \`train_reranker.py\` take the number of epochs, and run it for 8. In the table, find the epoch where the held-out loss stops falling: that's where training should stop. Keeping the best epoch (Guided step 5) protects you from overfitting.
+3. Run the comparison from Guided step 7. Did the held-out score move compared with your first run? Then save and push, as in Guided step 8.
+:::
+
+:::tier solo
+Try the cheaper fix properly instead. Set the flag in \`config/models.yaml\` back to \`base\` (Guided step 6). Change \`prompts/rewrite.md\` from Module 2 so the rewrite turns lawyer's words into everyday ones, and have the re-ranker read the rewritten question instead of the original. Measure it the same way as Guided step 7, on both wordings and on the held-out questions. Which was the better investment, the rewrite prompt or fine-tuning? Argue it with numbers, set the flag to the winner, then commit and push.
+:::
+
+**Files you create:** \`train/pairs.jsonl\` and \`train/heldout.jsonl\`, your training and held-out pairs, one per line; \`train_reranker.py\`, which fine-tunes the re-ranker; \`models/reranker-v2/\`, the folder holding the fine-tuned re-ranker (on your computer only); \`compare_rerankers.py\`, which compares base and tuned; and the re-ranker feature flag in \`config/models.yaml\`.
 
 **Capstone branch:** save this work on a branch called \`fine-tuned\` in your course project. It needs a re-ranker you can swap, a feature flag that picks base or tuned, and the held-out pairs saved alongside the code.
 
-**Check it with your assistant:** ask your coding assistant, "Does my fine-tuned branch split the pairs before generating extras, keep a held-out set the training never sees, switch between the base and tuned re-rankers with one feature flag in config/models.yaml, and save the scores for both?"`,
+**Check it with your assistant:** ask your coding assistant, "Does my fine-tuned branch keep train/heldout.jsonl out of training, switch between the base and tuned re-rankers with one feature flag in config/models.yaml, fall back to the base model when models/reranker-v2 is missing, and print the held-out score for both?"`,
     },
     {
       id: "m06-s07",
@@ -287,7 +469,8 @@ The right clause leads. The second sentence is still muddled, because a subcontr
     "disclosing-party", "receiving-party", "affiliate", "amendment", "notwithstanding", "written-consent",
     "re-rank", "cross-encoder", "fine-tuning", "base-model", "training-pair", "hard-negative", "held-out-set", "data-leakage",
     "epoch", "loss-curve", "overfitting", "feature-flag", "roll-back", "language-model", "prompt", "prompt-file", "query-rewriting",
-    "synonym-table", "settings-file", "index", "candidate", "deduplication", "branch",
+    "synonym-table", "settings-file", "index", "candidate", "deduplication", "routing-tag", "loss", "gitignore",
+    "terminal", "folder", "command", "script", "claude-code", "git", "github", "branch", "commit", "push",
   ],
 
   study_guide: [

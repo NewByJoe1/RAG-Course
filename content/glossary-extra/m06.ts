@@ -37,4 +37,18 @@ export const terms: GlossaryTerm[] = [
     definition: "When test examples also turn up in the training data, so the test score looks better than the model really is.",
     stage: null,
   },
+  {
+    id: "loss",
+    term: "Loss",
+    aliases: ["loss", "training loss", "held-out loss"],
+    definition: "A number for how wrong a model's scores are on a set of examples. Training tries to bring it down, so lower is better.",
+    stage: null,
+  },
+  {
+    id: "gitignore",
+    term: ".gitignore",
+    aliases: [".gitignore"],
+    definition: "A plain text file listing files and folders Git should leave out of commits, such as a big trained model.",
+    stage: null,
+  },
 ];

@@ -1,5 +1,6 @@
 import type { ModuleContent } from "../types";
 import { cite, NDA_CLAUSES as C, RUNNING_QUESTION } from "../nda";
+import { md } from "../md";
 
 // Module 7, rewritten on the running example. A teammate's synonym-table edit
 // helps an Affiliates question and silently drops §4.5 from the subcontractor
@@ -20,6 +21,24 @@ const GOLDEN_ROW = JSON.stringify({
   gold_clauses: [C.contractors.section, C.permittedDisclosure.section, C.permittedRecipient.section],
   answer: CORRECT_ANSWER,
 });
+
+// The golden set the hands-on's Guided tier pastes into eval/golden.jsonl.
+// Real clause numbers only; one row in ten is a question the NDA doesn't answer.
+const LAWYER_QUESTION = "May the Receiving Party disclose to a subcontractor?";
+const GOLDEN_SET = [
+  JSON.parse(GOLDEN_ROW),
+  { id: "nda-002", question: "Can we share this with our parent company?", type: "permission", gold_clauses: [C.permittedDisclosure.section], answer: `Yes. Affiliates may receive it, provided each is bound by written confidentiality obligations no less protective than this Agreement (${C.permittedDisclosure.section}).` },
+  { id: "nda-003", question: LAWYER_QUESTION, type: "paraphrase", gold_clauses: [C.contractors.section, C.permittedDisclosure.section, C.permittedRecipient.section], answer: CORRECT_ANSWER },
+  { id: "nda-004", question: "How long does this NDA last?", type: "duration", gold_clauses: [C.term.section], answer: `Two years from the Effective Date (${C.term.section}).` },
+  { id: "nda-005", question: "Is there a fee if we break the NDA?", type: "absence", gold_clauses: [], answer: "The contract does not address this." },
+  { id: "nda-006", question: "What do we do if a court orders us to hand over Acme's information?", type: "obligation", gold_clauses: [C.compelledDisclosure.section], answer: `You may disclose what the law or the court order requires, and you must give the Disclosing Party prompt notice (${C.compelledDisclosure.section}).` },
+  { id: "nda-007", question: "Which state's law applies to this agreement?", type: "governing-law", gold_clauses: [C.governingLaw.section], answer: `The laws of the State of Delaware (${C.governingLaw.section}).` },
+  { id: "nda-008", question: "Can our outside lawyers see Acme's confidential documents?", type: "definition-dependent", gold_clauses: [C.permittedRecipient.section, C.permittedDisclosure.section], answer: `Yes, if they need to know it for the Purpose and are bound by written confidentiality obligations no less protective than this Agreement. Professional advisers are Permitted Recipients (${C.permittedRecipient.section}), and ${C.permittedDisclosure.section} allows disclosure to Permitted Recipients.` },
+  { id: "nda-009", question: "Does a document count as confidential if nobody marked it?", type: "definition", gold_clauses: [C.definitions.section], answer: `Yes, if it isn't public and would reasonably be understood to be confidential (${C.definitions.section}).` },
+  { id: "nda-010", question: "Can we show the files to a freelance designer we hire?", type: "conflict", gold_clauses: [C.contractors.section, C.permittedDisclosure.section], answer: `Only with the Disclosing Party's prior written consent (${C.contractors.section}). A freelance designer is a contractor, not a Permitted Recipient, so the Permitted Recipient route in ${C.permittedDisclosure.section} doesn't apply.` },
+]
+  .map((row) => JSON.stringify(row))
+  .join("\n");
 
 const m07: ModuleContent = {
   id: "m07",
@@ -147,7 +166,7 @@ for row in rows:
         "groundedness": judge("groundedness", out, row),
         "answer_check": judge("answer", out, row),                # compares with row["answer"]
     })
-json.dump(results, open("eval/results.json", "w"), indent=2)`,
+json.dump(results, open("eval/answers.json", "w"), indent=2)`,
       code_language: "python",
     },
     {
@@ -164,7 +183,7 @@ json.dump(results, open("eval/results.json", "w"), indent=2)`,
 **Turn complaints into rows.** Add a thumbs-down button to the answers. When someone clicks it, save their question and what they expected. Someone checks it against the NDA, writes the gold clauses and the correct answer, and adds it to \`eval/golden.jsonl\`. Every mistake a user finds becomes a test the system has to pass from then on.`,
       code_snippet: `# compare.py: what changed between two runs
 before = {r["id"]: r for r in json.load(open("eval/baseline.json"))}
-after = {r["id"]: r for r in json.load(open("eval/results.json"))}
+after = {r["id"]: r for r in json.load(open("eval/answers.json"))}
 for id, r in after.items():
     for metric in ["recall_at_3", "citation_accuracy", "groundedness", "answer_check"]:
         if before[id][metric] and not r[metric]:
@@ -178,17 +197,193 @@ for id, r in after.items():
       order_index: 6,
       kind: "exercise",
       title: "Hands-on: try it yourself",
-      body_md: `**Predict first:** on your current pipeline, will the subcontractor row pass recall@3? Will it pass the answer check? Write down both guesses before you run anything.
+      body_md: md`**Predict first:** on your current pipeline, will the subcontractor row pass recall@3? Will it pass the answer check? Write down both guesses before you run anything.
 
-- **Guided:** Write \`eval/golden.jsonl\` with the subcontractor row first and at least 9 more questions about the NDA, covering different kinds of question. Run \`evaluate.py\` and list the 5 worst rows.
-- **Partial:** Save your results as the baseline. Then make the teammate's synonym-table edit on purpose, run the eval again, and show which row breaks. Undo it, fix your worst row by changing only one stage, and show that no other row regressed.
-- **Solo:** Write a judge prompt for groundedness, \`prompts/judge_groundedness.md\`. Grade 10 answers yourself, let the judge grade the same 10, and count how often you agree. Change the prompt until you agree on at least 9.
+:::tier guided
+:::step Open your project and make this module's branch
+**Where:** in your terminal (see Module 0 if you need a reminder of how to open it).
 
-**Files you create:** \`eval/golden.jsonl\`, your test questions, one per line; \`eval/results.json\`, the scores from each run; and \`prompts/judge_citation.md\` and \`prompts/judge_groundedness.md\`, the judge's instructions.
+**Do:** go into your project folder, then make a **branch** called \`eval\` for this module. A branch is a named copy of your code. You're on Module 6's \`fine-tuned\` branch, so the new one starts from your Module 6 work.
 
-**Capstone branch:** save this work on a branch called \`eval\` in your course project. It needs \`evaluate.py\` and a results table saved alongside the code every time you change something.
+~~~bash
+cd rag-course-project
+git switch -c eval
+~~~
 
-**Check it with your assistant:** ask your coding assistant, "Does my eval branch read eval/golden.jsonl, include the subcontractor question as a row, compute recall@3, citation accuracy, groundedness and the answer check, and report each one per routing tag?"`,
+**You should see:** \`Switched to a new branch 'eval'\`.
+
+**If it didn't work:** if it says the branch already exists, you've started this before: run \`git switch eval\` instead. If \`cd\` can't find the folder, open a new terminal (it starts in your home folder) and try again.
+:::
+
+:::step Make the whole pipeline one function
+**Where:** in Claude Code. Start it from your project folder:
+
+~~~bash
+claude
+~~~
+
+**Do:** to test the pipeline on many questions, your code needs one **function** (a named piece of code you can call) that takes a question and returns everything the pipeline did. Paste this into Claude Code and press Enter:
+
+~~~prompt
+Read ask.py and rag.py. If there isn't one already, add a function answer_question(question) to rag.py that runs exactly the same steps as ask.py (rewrite the question, retrieve, clean, re-rank, tag, generate) and returns three things: the routing tag, the clauses in the order the writer reads them (each with its section), and the answer text. Make ask.py use it, so its output doesn't change. Then run: uv run ask.py "${RUNNING_QUESTION}" and show me the output.
+~~~
+
+Claude Code asks before it changes a file or runs a command. Check it's what you expected and choose **Yes**.
+
+**You should see:** Claude Code changing \`rag.py\` and \`ask.py\`, then the same kind of output as in Module 6: the clauses, the routing tag and an answer to the subcontractor question. Read the answer and the first 3 clauses, and check your predictions against them.
+
+**If it didn't work:** if \`ask.py\` now prints something different from before, paste this:
+
+~~~prompt
+ask.py's output changed. Please make it print exactly what it printed before, while still using answer_question().
+~~~
+:::
+
+:::step Write the golden set
+**Where:** in Claude Code, still in your project.
+
+**Do:** the **golden set** is your list of test questions with known answers. Each line, or row, holds a question, its type, its **gold clauses** (the clauses that must be found to answer it) and the correct answer, checked against the NDA. The subcontractor question is the first row. Copy the whole box, paste it into Claude Code and press Enter.
+
+~~~prompt
+Create the file eval/golden.jsonl containing exactly the 10 lines below, one test question per line, with nothing added or changed.
+
+${GOLDEN_SET}
+~~~
+
+**You should see:** Claude Code creating \`eval/golden.jsonl\`. It holds 10 questions: the subcontractor question in everyday and lawyer's words, a question the NDA doesn't answer ("The contract does not address this."), and questions about Affiliates, outside lawyers, unmarked documents, court orders, how long the NDA lasts and which law applies.
+
+**If it didn't work:** if Claude Code shows only part of the text, paste this:
+
+~~~prompt
+Please check eval/golden.jsonl has exactly the 10 lines I gave you, and fix it if not.
+~~~
+:::
+
+:::step Write the judge's instructions
+**Where:** in Claude Code, still in your project.
+
+**Do:** recall@3 is simple counting, but the other scores need someone to read the answer. A second run of Claude does that reading, following a prompt file of instructions: that's **LLM-as-judge** (a large language model, or LLM, grading another's work). Paste this:
+
+~~~prompt
+Create three judge prompt files in prompts/. Each one must tell the judge to reply with exactly PASS or FAIL on the first line and one short sentence giving the reason on the second line, and to ignore how long or polished the answer is.
+- prompts/judge_citation.md: given an answer and the full text of every clause it cites, PASS only if each cited clause really says what the answer uses it for. Placeholders: {answer} and {cited_clauses}.
+- prompts/judge_groundedness.md: given an answer and the clauses the writer was given, PASS only if every claim in the answer is backed by those clauses. Placeholders: {answer} and {clauses}.
+- prompts/judge_answer.md: given a question, its correct answer and the system's answer, PASS only if the system's answer reaches the same conclusion and doesn't offer a route or condition that the correct answer rules out. Placeholders: {question}, {correct_answer} and {answer}.
+Also add the line "judge: sonnet" to config/models.yaml: the Claude model the judge uses.
+~~~
+
+**You should see:** three new files in \`prompts/\`, each a few lines long and ending with its placeholders, and one new line in \`config/models.yaml\`.
+
+**If it didn't work:** if a file asks for a score out of 10 instead of \`PASS\` or \`FAIL\`, paste this:
+
+~~~prompt
+Each judge must answer only PASS or FAIL on the first line, and the reason on the second. Please fix the three files.
+~~~
+:::
+
+:::step Build the eval script and run it
+**Where:** in Claude Code, still in your project.
+
+**Do:** copy the whole box, paste it into Claude Code and press Enter. It writes \`evaluate.py\`, the **eval script**: it sends every golden-set question through your pipeline and scores the result. It saves each answer to \`eval/answers.json\`, so the scores can be worked out again later without asking any model, and writes the totals to \`eval/metrics.json\`, the file the course reads.
+
+~~~prompt
+Write evaluate.py, run with uv, that scores the whole pipeline on eval/golden.jsonl.
+- For each row, call answer_question() with the row's question. Record the routing tag, the sections of the first 3 clauses the writer reads (top3), the sections of all the clauses it was given, and the answer.
+- recall@3 for a row is the share of its gold_clauses that are in top3 (3 of 3 is 1.0). Rows with no gold clauses get no recall@3.
+- Then ask the judge three times, each time by running: claude -p --model <the judge model from config/models.yaml>, with a prompt file from prompts/ filled in. judge_citation.md gets the full text, from data/nda.md, of every section the answer cites; if the answer cites nothing, skip this one. judge_groundedness.md gets the clauses the writer was given. judge_answer.md gets the row's correct answer. A reply whose first line isn't PASS counts as a fail. Keep each reply's reason.
+- Save everything for every row to eval/answers.json (question, tag, top3, sections given, answer, recall@3, and each judge's result and reason), so it can be scored again later without any model.
+- Compute the averages from eval/answers.json: recall_at_3, citation_accuracy, groundedness and answer_check, each between 0 and 1, rounded to 2 decimal places, over the rows that have that score. Write them to eval/metrics.json, together with these fields the course also reads, which later modules fill in: "cross_tenant_leaks": 0, "concurrent_users_tested": 0, "kill_switch_tested": false.
+- Print one line per row as it finishes: id, recall@3, then citation, groundedness and answer check as pass or fail. At the end, print the four averages overall and for each routing tag.
+- Add an option, uv run evaluate.py --saved, that skips the pipeline and the judge entirely: it only reads eval/answers.json, prints the same report and rewrites eval/metrics.json. It must not load any model or call Claude.
+Then run uv run evaluate.py and show me the report.
+~~~
+
+**You should see:** Claude Code asking permission to create files and run commands: choose **Yes** each time. The run takes a while, roughly one to two minutes per question (10 to 20 minutes in all), because every question goes through your whole pipeline and then to the judge three times. It prints one line per question as it goes, then the averages overall and per routing tag.
+
+**If it didn't work:** if it stops with an error it doesn't fix by itself, copy the error, paste it back, and add "Please fix this." If every judge result is a fail, paste this:
+
+~~~prompt
+Every judge result is a fail. Show me one judge reply exactly as Claude returned it, and fix how evaluate.py reads PASS or FAIL.
+~~~
+:::
+
+:::video m07-build-eval
+:::
+
+:::step Read the report
+**Where:** in your terminal. Leave Claude Code first: type \`/exit\` and press Enter.
+
+**Do:** score the saved answers again. This uses \`eval/answers.json\` only, so it takes a second and asks no model:
+
+~~~bash
+uv run evaluate.py --saved
+~~~
+
+**You should see:** the same report as at the end of the last step: one line per question, then the averages, each between 0 and 1. Find the row \`nda-001\`, the subcontractor question, and write down its four results next to your predictions. In the lesson it passed recall@3, citation accuracy and groundedness, and failed the answer check, because the answer still offers a route under ${C.permittedDisclosure.section}. Yours may differ. Then write down the 5 worst rows: the ones with the most fails.
+
+**If it didn't work:** if it says \`eval/answers.json\` doesn't exist, the full run didn't finish. Run \`uv run evaluate.py\` (without \`--saved\`) and wait for the report.
+:::
+
+:::video m07-read-report
+:::
+
+:::step Make the course's check use your eval
+**Where:** in Claude Code. Start it again from your project folder with \`claude\`.
+
+**Do:** every time you push, GitHub runs \`eval/run.sh\`, a small script from the course template, and the course reads the \`eval/metrics.json\` it writes. Until now it wrote zeros. Paste this to make it use your eval:
+
+~~~prompt
+Change eval/run.sh so it writes eval/metrics.json from our eval, for the course's checks on GitHub.
+- Keep its first line (#!/usr/bin/env bash) and "set -euo pipefail", and run everything from the project's main folder.
+- If the uv command is available, run: uv run evaluate.py --saved
+- If it isn't (GitHub doesn't have uv yet; Module 8 adds it), print "::warning::uv not found; using the committed eval/metrics.json" and keep the committed file.
+- Either way, stop with a clear error if eval/metrics.json is missing.
+Update the comment at the top to say what it does now. Don't touch eval/write-results.mjs. Then run: bash eval/run.sh and show me eval/metrics.json.
+~~~
+
+**You should see:** Claude Code changing \`eval/run.sh\`, running it, and showing \`eval/metrics.json\` with your \`recall_at_3\` and \`citation_accuracy\` (the two scores the capstone checks), your groundedness and answer check, and the three fields later modules fill in. Leave \`eval/results.json\` alone: GitHub writes it from \`eval/metrics.json\`.
+
+**If it didn't work:** if \`eval/metrics.json\` still shows zeros for \`recall_at_3\`, paste this:
+
+~~~prompt
+eval/metrics.json still has zeros. Please check that eval/run.sh runs uv run evaluate.py --saved from the project's main folder.
+~~~
+:::
+
+:::step Save your work and send it to GitHub
+**Where:** in your terminal, inside \`rag-course-project\`. Leave Claude Code first: type \`/exit\` and press Enter.
+
+**Do:** run these three lines one at a time. The first picks up every new and changed file, the second **commits** them (saves a snapshot with a note), and the third **pushes** the branch to GitHub, so it's backed up. Your saved answers and scores go with it, so the course can read them.
+
+~~~bash
+git add -A
+git commit -m "Module 7: golden set and evaluate.py"
+git push -u origin eval
+~~~
+
+**You should see:** after the commit, a line like \`[eval 1a2b3c4] Module 7: golden set and evaluate.py\`. After the push, a line saying the branch \`eval\` is set up to track \`origin/eval\`. On GitHub, your project now has an \`eval\` branch with \`eval/golden.jsonl\`, \`eval/answers.json\` and \`eval/metrics.json\` in it.
+
+**If it didn't work:** if the commit says "nothing to commit", the files were saved somewhere else: check you're in \`rag-course-project\` with \`pwd\`, then run the three lines again. If the push asks for a username or password, run \`gh auth login\` (Module 0, Part 3) and push again.
+:::
+:::
+
+:::tier partial
+Now replay the teammate's edit from the lesson, and watch the eval catch it.
+
+1. Keep today's results as your **baseline**. Start Claude Code, as in Guided step 2, and ask it to copy \`eval/answers.json\` to \`eval/baseline.json\` and write \`compare.py\`, which prints every row and score that passed in the baseline and fails now.
+2. Make the teammate's edit on purpose: ask Claude Code to merge the subcontractor and third-party rows of your synonym table (from Module 2) so that "contractor" drops out. Run the full eval, as in Guided step 5 (\`uv run evaluate.py\`), then \`uv run compare.py\`. Which row regressed, and on which score?
+3. Ask Claude Code to put the synonym table back as it was in your last commit. Then fix your worst row from Guided step 6 by changing only one stage, run the eval and the comparison again, and check that no other row regressed. Save and push, as in Guided step 8.
+:::
+
+:::tier solo
+Check the judge before you trust it. Pick 10 rows from \`eval/answers.json\` and grade each answer's groundedness yourself, without looking at the judge's result. Then compare: how often do you and the judge agree? Change \`prompts/judge_groundedness.md\` (Guided step 4) until you agree on at least 9 of the 10, run the full eval again (Guided step 5), and commit and push.
+:::
+
+**Files you create:** \`eval/golden.jsonl\`, your test questions, one per line; \`evaluate.py\`, the eval script; \`eval/answers.json\`, every answer with its scores; \`eval/metrics.json\`, the totals the course reads; \`prompts/judge_citation.md\`, \`prompts/judge_groundedness.md\` and \`prompts/judge_answer.md\`, the judge's instructions; and a new \`eval/run.sh\`.
+
+**Capstone branch:** save this work on a branch called \`eval\` in your course project. It needs \`evaluate.py\`, and its saved answers and scores committed alongside the code every time you change something.
+
+**Check it with your assistant:** ask your coding assistant, "Does my eval branch read eval/golden.jsonl, include the subcontractor question as a row, compute recall@3, citation accuracy, groundedness and the answer check, report each one per routing tag, save the answers so evaluate.py --saved can re-score them without a model, and make eval/run.sh write recall_at_3 and citation_accuracy to eval/metrics.json?"`,
     },
     {
       id: "m07-s07",
@@ -272,7 +467,8 @@ The muddle is now a measured failure on a named row, not a hunch.`,
     "disclosing-party", "receiving-party", "affiliate", "amendment", "notwithstanding", "written-consent",
     "eval", "golden-set", "gold-clause", "eval-script", "metric", "recall-at-3", "citation-accuracy", "groundedness", "answer-check",
     "llm", "llm-as-judge", "language-model", "prompt", "citation", "baseline", "regression", "routing-tag", "guardrail",
-    "synonym-table", "keyword-search", "re-rank", "fine-tuning", "base-model", "training-pair", "held-out-set", "branch",
+    "synonym-table", "keyword-search", "re-rank", "fine-tuning", "base-model", "training-pair", "held-out-set", "settings-file",
+    "terminal", "folder", "command", "function", "script", "claude-code", "github", "template-repository", "branch", "commit", "push",
   ],
 
   study_guide: [
