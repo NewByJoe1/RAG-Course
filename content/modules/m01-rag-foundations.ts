@@ -260,7 +260,7 @@ So this is a **retrieval miss**: the right clause existed, but the search didn't
   // checks none is missing): contract words first, then RAG words.
   glossary: [
     "nda", "clause", "section-sign", "subcontractor", "third-party", "permitted-recipient", "confidential-information",
-    "disclosing-party", "receiving-party", "affiliate", "amendment", "notwithstanding",
+    "disclosing-party", "receiving-party", "affiliate", "amendment", "notwithstanding", "written-consent",
     "rag", "language-model", "prompt", "prompt-file", "pdf", "chunk", "embedding", "vector", "cosine-similarity", "index",
     "keyword-search", "grounding", "citation", "retrieval-miss", "re-rank", "token", "function", "branch", "database",
   ],

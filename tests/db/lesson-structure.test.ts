@@ -31,9 +31,10 @@ describe("0010 lesson structure: content", () => {
 
   it("lets anyone read lesson content for published modules only", async () => {
     await q(`update public.modules set is_published = false where id = 'm02'`);
-    await q(`insert into public.worked_example_steps (id, module_id, order_index, title, body_md) values ('m02-w01', 'm02', 1, 'Draft', 'x')`);
-    const anonRows = await t.as("anon", null, () => q<{ module_id: string }>(`select distinct module_id from public.worked_example_steps`));
-    expect(anonRows.rows.map((r) => r.module_id)).toEqual(["m01"]);
+    await q(`insert into public.worked_example_steps (id, module_id, order_index, title, body_md) values ('m02-w99', 'm02', 99, 'Draft', 'x')`);
+    const anonRows = await t.as("anon", null, () => q<{ module_id: string }>(`select distinct module_id from public.worked_example_steps order by module_id`));
+    const withWorked = modules.filter((m) => m.worked_example?.length && m.id !== "m02").map((m) => m.id);
+    expect(anonRows.rows.map((r) => r.module_id)).toEqual(withWorked);
     const terms = await t.as("anon", null, () => q(`select 1 from public.glossary_terms`));
     expect(terms.rows.length).toBeGreaterThanOrEqual(m01.glossary!.length);
     await q(`update public.modules set is_published = true where id = 'm02'`);

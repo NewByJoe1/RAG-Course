@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
-import { moduleNumber, PIPELINE, type PipelineStage, type PipelineStageId } from "@/content/pipeline";
+import { exampleFor, moduleNumber, PIPELINE, type PipelineStage, type PipelineStageId } from "@/content/pipeline";
 import { Markdown } from "@/components/lesson/Markdown";
 
 type Status = { kind: "here" } | { kind: "earlier"; module: number } | { kind: "later"; module: number } | null;
@@ -124,7 +124,7 @@ export function PipelineDiagram({
 
         <div id={panelId} role="region" aria-live="polite" aria-label="Stage details" className="rounded-2xl border border-neutral-200 p-5 md:sticky md:top-20 dark:border-neutral-800">
           {active ? (
-            <StageDetails stage={active} status={statusOf(active, current, moduleId)} />
+            <StageDetails stage={active} status={statusOf(active, current, moduleId)} moduleId={moduleId} />
           ) : (
             <p className="text-sm text-neutral-500">Choose a stage to see what it does, why it&apos;s there and how it&apos;s done.</p>
           )}
@@ -134,12 +134,13 @@ export function PipelineDiagram({
   );
 }
 
-function StageDetails({ stage, status }: { stage: PipelineStage; status: Status }) {
-  const rows: [string, string][] = [
-    ["What it does", stage.does],
-    ["Why it's there", stage.why],
-    ["With the whole pipeline built", stage.example],
-  ];
+function StageDetails({ stage, status, moduleId }: { stage: PipelineStage; status: Status; moduleId?: string }) {
+  // The running example as of this module; the finished pipeline for stages not built yet.
+  const sofar = moduleId && status?.kind !== "later" ? exampleFor(stage, moduleId) : null;
+  const example: [string, string] = sofar
+    ? [`The subcontractor question, as of Module ${moduleNumber(moduleId!)}`, sofar.text]
+    : [moduleId ? "Once it's built" : "With the whole pipeline built", stage.example];
+  const rows: [string, string][] = [["What it does", stage.does], ["Why it's there", stage.why], example];
   const others = stage.modules.filter((m) => m !== stage.coveredIn).map(moduleNumber);
   const seen = new Set<string>(); // underline each term once per panel
   return (

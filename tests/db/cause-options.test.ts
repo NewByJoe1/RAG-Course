@@ -23,7 +23,8 @@ describe("0006 failure cause options", () => {
     );
     expect(rows).toHaveLength(modules.flatMap((m) => m.failure_cases).length);
     expect(rows.every((r) => r.n === 3)).toBe(true);
-    expect(rows.find((r) => r.id === "m03-f02")?.correct_cause).toBe("b");
+    const m03f02 = modules.flatMap((m) => m.failure_cases).find((f) => f.id === "m03-f02")!;
+    expect(rows.find((r) => r.id === "m03-f02")?.correct_cause).toBe(m03f02.correct_cause);
   });
 
   it("still allows a case without options", async () => {

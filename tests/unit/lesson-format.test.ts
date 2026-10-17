@@ -13,8 +13,8 @@ const messages = (m: ModuleContent) => {
 };
 
 describe("beginner lesson format", () => {
-  it("is used by Module 1 only, until Modules 2–11 are reviewed and rewritten", () => {
-    expect(modules.filter((m) => m.hook).map((m) => m.id)).toEqual(["m01"]);
+  it("is used by Modules 1–11 (the capstone has no lesson)", () => {
+    expect(modules.filter((m) => m.hook).map((m) => m.id)).toEqual(["m01", "m02", "m03", "m04", "m05", "m06", "m07", "m08", "m09", "m10", "m11"]);
   });
 
   it("is all-or-nothing: a hook needs every other part", () => {
@@ -64,23 +64,53 @@ describe("pipeline spine", () => {
   });
 });
 
-describe("Module 1 stays on the running example", () => {
-  const onThread = (t: string) => /subcontractor|\bNDA\b|§\d|Permitted Recipient/.test(t);
-  // The off-thread examples the old Module 1 used.
-  const drift = /E4021|error code|refund|Pro plan|pricing|employee handbook|API reference|\bSKU|orders? (did we ship|table)/i;
+const lessonModules = modules.filter((m) => m.hook);
+const onThread = (t: string) => /subcontractor|\bNDA\b|§\d|Permitted Recipient/.test(t);
+// Off-thread examples earlier drafts used: other businesses' documents and
+// other contracts. Every module stays on the one NDA.
+const drift =
+  /E4021|error code|refund|Pro plan|pricing|employee handbook|API reference|\bSKU|orders? (did we ship|table)|employment contract|\blease\b|master services agreement|\bMSA\b|termination clause/i;
+
+describe.each(lessonModules.map((m) => [m.id, m] as const))("%s stays on the running example", (_id, m) => {
+  it("opens on the subcontractor question going wrong", () => {
+    expect(m.hook).toContain(RUNNING_QUESTION);
+  });
 
   it("ties every lesson step, worked step and failure case to the NDA or the subcontractor question", () => {
-    const material = m01.lesson_steps.filter((s) => s.kind !== "warm_up");
+    const material = m.lesson_steps.filter((s) => s.kind !== "warm_up");
     for (const s of material) expect(onThread(`${s.title} ${s.body_md}`), s.id).toBe(true);
-    for (const w of m01.worked_example!) expect(onThread(`${w.title} ${w.body_md} ${w.query_state ?? ""} ${w.code_snippet ?? ""}`), w.id).toBe(true);
-    for (const f of m01.failure_cases) expect(f.user_query, f.id).toBe(RUNNING_QUESTION);
+    for (const w of m.worked_example!) expect(onThread(`${w.title} ${w.body_md} ${w.query_state ?? ""} ${w.code_snippet ?? ""}`), w.id).toBe(true);
+    for (const f of m.failure_cases) expect(f.user_query, f.id).toMatch(/subcontractor/i);
   });
 
-  it("no longer drifts into unrelated documents", () => {
-    const all = JSON.stringify(m01);
-    expect(all.match(drift)).toBeNull();
+  it("doesn't drift into unrelated documents", () => {
+    expect(JSON.stringify(m).match(drift)).toBeNull();
   });
 
+  it("has Module 1's shape: warm-up, five parts with the hands-on as the sixth step, 7 quiz items, 3 failure cases", () => {
+    expect(m.lesson_steps.map((s) => s.kind)).toEqual(m01.lesson_steps.map((s) => s.kind));
+    expect([m.quiz_items.length, m.failure_cases.length]).toEqual([7, 3]);
+    expect(m.study_guide!.length).toBeGreaterThanOrEqual(5);
+    expect(m.worked_example!.length).toBeGreaterThanOrEqual(5);
+  });
+
+  it("keeps cause options honest: the correct one is the longest in at most one of its three cases", () => {
+    const longest = m.failure_cases.filter((f) => {
+      const len = f.cause_options!.find((o) => o.id === f.correct_cause)!.text.length;
+      return f.cause_options!.every((o) => o.id === f.correct_cause || o.text.length < len);
+    });
+    expect(longest.map((f) => f.id).length, longest.map((f) => f.id).join()).toBeLessThanOrEqual(1);
+  });
+});
+
+describe("Modules 7 and 11 test the subcontractor question in the golden set", () => {
+  it.each(["m07", "m11"])("%s shows the NDA subcontractor pair as a golden-set row", (id) => {
+    const m = modules.find((x) => x.id === id)!;
+    expect(JSON.stringify(m)).toMatch(/golden\.jsonl[\s\S]*Can we share this with a subcontractor\?[\s\S]*§4\.5/);
+  });
+});
+
+describe("Module 1 sets up the course", () => {
   it("quotes the NDA's clauses exactly as the shared NDA defines them", () => {
     const text = JSON.stringify(m01);
     for (const c of [NDA_CLAUSES.definitions, NDA_CLAUSES.permittedDisclosure, NDA_CLAUSES.contractors]) expect(text).toContain(JSON.stringify(c.text).slice(1, -1));

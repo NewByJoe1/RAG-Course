@@ -1,4 +1,14 @@
 import type { PipelineStageId } from "./pipeline";
+import { terms as m02 } from "./glossary-extra/m02";
+import { terms as m03 } from "./glossary-extra/m03";
+import { terms as m04 } from "./glossary-extra/m04";
+import { terms as m05 } from "./glossary-extra/m05";
+import { terms as m06 } from "./glossary-extra/m06";
+import { terms as m07 } from "./glossary-extra/m07";
+import { terms as m08 } from "./glossary-extra/m08";
+import { terms as m09 } from "./glossary-extra/m09";
+import { terms as m10 } from "./glossary-extra/m10";
+import { terms as m11 } from "./glossary-extra/m11";
 
 // One shared glossary: the single source for lesson tooltips, each module's
 // glossary list and /glossary. Written for someone completely new: plain
@@ -312,6 +322,256 @@ export const GLOSSARY: GlossaryTerm[] = [
     definition: "A setting that turns answering off completely, used when something goes wrong.",
     stage: "eval-guardrails",
   },
+  // --- Shared by later modules ---------------------------------------------
+  {
+    id: "llm",
+    term: "LLM (large language model)",
+    aliases: ["LLM", "LLMs", "large language model", "large language models"],
+    definition: "A big language model, the kind behind chatbots, trained on huge amounts of text.",
+    stage: "generation",
+  },
+  {
+    id: "query-rewriting",
+    term: "Query rewriting",
+    aliases: ["query rewriting", "rewrite prompt"],
+    definition: "Having a model restate the question in the contract's own words before searching.",
+    stage: "pre-retrieval",
+  },
+  {
+    id: "metadata",
+    term: "Metadata",
+    aliases: ["metadata"],
+    definition: "Labels stored with each clause, such as which document it's from, its section number or its date.",
+    stage: "pre-retrieval",
+  },
+  {
+    id: "metadata-filter",
+    term: "Metadata filter",
+    aliases: ["metadata filter", "metadata filters"],
+    definition: "A rule that limits the search to clauses with certain labels, such as \"only NDAs\".",
+    stage: "pre-retrieval",
+  },
+  {
+    id: "routing-tag",
+    term: "Routing tag",
+    aliases: ["routing tag", "routing tags", "routing label", "routing labels"],
+    definition: "A one-word label on a question (simple, multi-clause or conflicting) that decides which model answers it.",
+    stage: "routing",
+  },
+  {
+    id: "hybrid-search",
+    term: "Hybrid search",
+    aliases: ["hybrid search"],
+    definition: "Running a meaning search and a keyword search together, then merging their results.",
+    stage: "hybrid-retrieval",
+  },
+  {
+    id: "candidate",
+    term: "Candidate",
+    aliases: ["candidate", "candidates", "candidate clauses"],
+    definition: "A clause search found that might answer the question, before the later stages sort them out.",
+    stage: "hybrid-retrieval",
+  },
+  {
+    id: "deduplication",
+    term: "Deduplication",
+    aliases: ["deduplication", "deduplicate", "near-duplicate", "near-duplicates"],
+    definition: "Removing clauses that are copies, or almost copies, of one already kept.",
+    stage: "post-retrieval",
+  },
+  {
+    id: "score-threshold",
+    term: "Score threshold",
+    aliases: ["score threshold", "threshold"],
+    definition: "A cut-off score: results below it are dropped as too weak to be worth reading.",
+    stage: "post-retrieval",
+  },
+  {
+    id: "context-window",
+    term: "Context window",
+    aliases: ["context window"],
+    definition: "How much text a language model can read at once. Everything you send has to fit inside it.",
+    stage: "generation",
+  },
+  {
+    id: "latency",
+    term: "Latency",
+    aliases: ["latency"],
+    definition: "How long you wait for an answer, usually counted in seconds or milliseconds.",
+    stage: null,
+  },
+  {
+    id: "fine-tuning",
+    term: "Fine-tuning",
+    aliases: ["fine-tuning", "fine-tune", "fine-tuned", "fine-tunes"],
+    definition: "Training an existing model a little more on your own examples, so it gets better at one job.",
+    stage: null,
+  },
+  {
+    id: "training-pair",
+    term: "Training pair",
+    aliases: ["training pair", "training pairs"],
+    definition: "One example used to teach a model: a question plus a clause, marked as a good or bad match.",
+    stage: null,
+  },
+  {
+    id: "hard-negative",
+    term: "Hard negative",
+    aliases: ["hard negative", "hard negatives"],
+    definition: "A wrong clause that looks very like the right one, used in training so the model learns the difference.",
+    stage: null,
+  },
+  {
+    id: "held-out-set",
+    term: "Held-out set",
+    aliases: ["held-out set", "held-out"],
+    definition: "Examples kept aside and never used for training, so you can test the model fairly afterwards.",
+    stage: null,
+  },
+  {
+    id: "overfitting",
+    term: "Overfitting",
+    aliases: ["overfitting", "overfit"],
+    definition: "When a model memorises its training examples instead of learning the pattern, so it does worse on new ones.",
+    stage: null,
+  },
+  {
+    id: "dataset",
+    term: "Dataset",
+    aliases: ["dataset", "datasets"],
+    definition: "A collection of examples, such as questions paired with the clauses that answer them.",
+    stage: null,
+  },
+  {
+    id: "recall-at-3",
+    term: "Recall@3",
+    aliases: ["recall@3", "recall@k"],
+    definition: "How often the clause that answers a question is among the top 3 results. Said \"recall at three\".",
+    stage: "eval-guardrails",
+  },
+  {
+    id: "citation-accuracy",
+    term: "Citation accuracy",
+    aliases: ["citation accuracy"],
+    definition: "How often the clauses an answer cites really say what the answer claims.",
+    stage: "eval-guardrails",
+  },
+  {
+    id: "groundedness",
+    term: "Groundedness",
+    aliases: ["groundedness"],
+    definition: "How much of an answer is backed up by the clauses it was given, rather than made up.",
+    stage: "eval-guardrails",
+  },
+  {
+    id: "llm-as-judge",
+    term: "LLM-as-judge",
+    aliases: ["LLM-as-judge"],
+    definition: "Using a second language model, with careful instructions, to grade answers the way a person would.",
+    stage: "eval-guardrails",
+  },
+  {
+    id: "regression",
+    term: "Regression",
+    aliases: ["regression", "regressions", "regressed"],
+    definition: "Something that used to work and quietly got worse after a change.",
+    stage: "eval-guardrails",
+  },
+  {
+    id: "ci",
+    term: "CI (continuous integration)",
+    aliases: ["CI"],
+    definition: "Automatic checks that run every time someone changes the code, before the change is accepted.",
+    stage: "eval-guardrails",
+  },
+  {
+    id: "deploy",
+    term: "Deploy",
+    aliases: ["deploy", "deploys", "deployed", "deployment"],
+    definition: "Putting a new version of the system live, where real users get its answers.",
+    stage: null,
+  },
+  {
+    id: "alert",
+    term: "Alert",
+    aliases: ["alert", "alerts"],
+    definition: "An automatic message, such as an email, sent to a person when a number crosses a line.",
+    stage: "eval-guardrails",
+  },
+  {
+    id: "dashboard",
+    term: "Dashboard",
+    aliases: ["dashboard"],
+    definition: "One page of charts showing how the system is doing over time.",
+    stage: "eval-guardrails",
+  },
+  {
+    id: "canary",
+    term: "Canary questions",
+    aliases: ["canary", "canaries", "canary questions"],
+    definition: "A handful of questions that must always pass. If one fails, the change is stopped.",
+    stage: "eval-guardrails",
+  },
+  {
+    id: "hallucination",
+    term: "Hallucination",
+    aliases: ["hallucination", "hallucinations", "hallucinated"],
+    definition: "When a model states something, or quotes something, that isn't in the text it was given.",
+    stage: "generation",
+  },
+  {
+    id: "citation-verification",
+    term: "Citation verification",
+    aliases: ["citation verification"],
+    definition: "Checking that every quote in an answer appears word for word in the contract before showing it.",
+    stage: "eval-guardrails",
+  },
+  {
+    id: "tenant-isolation",
+    term: "Tenant isolation",
+    aliases: ["tenant isolation", "tenant", "tenants"],
+    definition: "Keeping each customer's contracts walled off, so one customer can never see another's.",
+    stage: "eval-guardrails",
+  },
+  {
+    id: "fail-closed",
+    term: "Fail closed",
+    aliases: ["fail closed", "fails closed"],
+    definition: "When a safety check can't run, block the answer instead of letting it through.",
+    stage: "eval-guardrails",
+  },
+  {
+    id: "defined-term",
+    term: "Defined term",
+    aliases: ["defined term", "defined terms"],
+    definition: "A word a contract gives its own exact meaning, usually written with capitals, like \"Permitted Recipient\".",
+    stage: null,
+  },
+  {
+    id: "precedence",
+    term: "Precedence",
+    aliases: ["precedence"],
+    definition: "Which rule wins when two clauses disagree, for example a later amendment over the original text.",
+    stage: null,
+  },
+  {
+    id: "written-consent",
+    term: "Prior written consent",
+    aliases: ["prior written consent"],
+    definition: "Permission given in writing before you act, not afterwards.",
+    stage: null,
+  },
+  // --- Terms each later module adds (content/glossary-extra/) ----------------
+  ...m02,
+  ...m03,
+  ...m04,
+  ...m05,
+  ...m06,
+  ...m07,
+  ...m08,
+  ...m09,
+  ...m10,
+  ...m11,
 ];
 
 export const GLOSSARY_BY_ID: Record<string, GlossaryTerm> = Object.fromEntries(GLOSSARY.map((g) => [g.id, g]));

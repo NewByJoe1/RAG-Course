@@ -35,23 +35,11 @@ describe("course content", () => {
     if (!r.success) expect(r.error.issues[0].message).toContain("failure_cases[0].fix");
   });
 
-  it("publishes Module 2 with Module 1's structure, except where noted", () => {
-    const [m01, m02] = ["m01", "m02"].map((id) => modules.find((m) => m.id === id)!);
-    expect(m02).toMatchObject({ is_published: true, order_index: 2, slug: "pre-retrieval" });
-    expect(m02.lesson_steps).toHaveLength(m01.lesson_steps.length);
-    expect(m02.quiz_items).toHaveLength(m01.quiz_items.length);
-    expect(m02.failure_cases).toHaveLength(m01.failure_cases.length);
-    // Deliberate differences: warm-up recall is an exercise, and Routing precedes the hands-on exercise.
-    expect(m02.lesson_steps.map((s) => s.kind)).toEqual(["exercise", "concept", "concept", "example", "concept", "exercise", "reflection"]);
-    // Module 1's quiz-type order except slot 6, since Module 2 has one multi-select.
-    expect(m02.quiz_items.map((q) => q.kind)).toEqual(m01.quiz_items.map((q, i) => (i === 5 ? "single_choice" : q.kind)));
-  });
-
-  it.each(["m03", "m04", "m05", "m06", "m07", "m08", "m09", "m10", "m11"])("publishes %s with the same 7 / 7 / 3 structure", (id) => {
-    const m = modules.find((x) => x.id === id)!;
+  it.each(["m02", "m03", "m04", "m05", "m06", "m07", "m08", "m09", "m10", "m11"])("publishes %s with Module 1's 7 / 7 / 3 structure", (id) => {
+    const [m01, m] = ["m01", id].map((x) => modules.find((y) => y.id === x)!);
     expect(m.is_published).toBe(true);
     expect([m.lesson_steps.length, m.quiz_items.length, m.failure_cases.length]).toEqual([7, 7, 3]);
-    expect(m.lesson_steps.map((s) => s.kind)).toEqual(["exercise", "concept", "concept", "example", "exercise", "exercise", "reflection"]);
+    expect(m.lesson_steps.map((s) => s.kind)).toEqual(m01.lesson_steps.map((s) => s.kind));
     expect(m.order_index).toBe(Number(id.slice(1)));
   });
 
