@@ -45,7 +45,7 @@ describe("course content", () => {
 
   it("keeps module order contiguous for the published course", () => {
     const published = modules.filter((m) => m.is_published).map((m) => m.order_index);
-    expect(published).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+    expect(published).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
   });
 
   describe("failure cause options", () => {

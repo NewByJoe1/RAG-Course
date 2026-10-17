@@ -30,6 +30,8 @@ beforeAll(async () => {
   t = await createTestDb();
   await t.createUser(ALICE, "alice@example.com");
   await t.createUser(BOB, "bob@example.com");
+  await t.completeSetup(ALICE);
+  await t.completeSetup(BOB);
 });
 
 describe("card enrolment", () => {
@@ -148,6 +150,7 @@ describe("streak history", () => {
 
   it("buckets quiz attempts and reviews by the learner's local day", async () => {
     await t.createUser(CAROL, "carol@example.com");
+    await t.completeSetup(CAROL);
     await q(`update public.profiles set timezone = 'America/Los_Angeles' where id = $1`, [CAROL]);
     await q(`insert into public.review_cards (user_id, quiz_item_id) values ($1, 'm01-q01')`, [CAROL]);
     const { rows: c } = await q<{ id: string }>(`select id from public.review_cards where user_id = $1`, [CAROL]);

@@ -12,6 +12,8 @@ beforeAll(async () => {
   t = await createTestDb();
   await t.createUser(ANA, "ana@example.com");
   await t.createUser(BEN, "ben@example.com");
+  await t.completeSetup(ANA);
+  await t.completeSetup(BEN);
 });
 
 describe("0010 lesson structure: content", () => {

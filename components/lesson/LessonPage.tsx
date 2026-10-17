@@ -4,6 +4,10 @@ import type { LessonStepRow } from "@/lib/course/lesson-data";
 import { parseHandsOn } from "@/lib/course/hands-on";
 import { Markdown } from "./Markdown";
 import { HandsOn } from "./HandsOn";
+import { SystemPicker } from "./System";
+
+/** True when the text has steps that differ by kind of computer. */
+export const hasSystemSteps = (md: string) => /^:::(mac|windows|linux)\s*$/m.test(md);
 
 // Building blocks shared by every tab page of the lesson.
 
@@ -69,6 +73,7 @@ export function StepBody({ s }: { s: LessonStepRow }) {
   const plan = s.kind === "exercise" ? parseHandsOn(s.body_md) : null;
   return (
     <div className="max-w-2xl space-y-6">
+      {hasSystemSteps(s.body_md) && <SystemPicker />}
       {plan ? <HandsOn plan={plan} /> : <Markdown text={s.body_md} />}
       <Code s={s} />
     </div>

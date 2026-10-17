@@ -83,7 +83,7 @@ describe("HandsOn", () => {
   it("reveals the tiers one at a time: guided, then partial, then solo", async () => {
     const user = userEvent.setup();
     render(<HandsOn plan={plan} />);
-    const tiers = () => within(screen.getByRole("list", { name: "Try it yourself" })).getAllByRole("heading", { level: 4 });
+    const tiers = () => within(screen.getByRole("list", { name: "Try it yourself" })).getAllByRole("heading", { level: 2 });
     expect(tiers().map((h) => h.textContent)).toEqual(["Start here"]);
     await user.click(screen.getByRole("button", { name: "Done? Show the next step →" }));
     expect(tiers().map((h) => h.textContent)).toEqual(["Start here", "Now with less help"]);

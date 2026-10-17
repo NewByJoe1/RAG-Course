@@ -75,7 +75,7 @@ describe("findTerms", () => {
 
 describe("parseHandsOn", () => {
   it("reads the three tiers and the project details from every module's hands-on step", () => {
-    const exercises = modules.flatMap((m) => m.lesson_steps.filter((s) => s.kind === "exercise" && /\*\*Guided:\*\*/.test(s.body_md)));
+    const exercises = modules.flatMap((m) => m.lesson_steps.filter((s) => s.kind === "exercise" && /\*\*Guided:\*\*|^:::tier guided/m.test(s.body_md)));
     expect(exercises.length).toBeGreaterThanOrEqual(11);
     for (const s of exercises) {
       const plan = parseHandsOn(s.body_md);
@@ -90,6 +90,13 @@ describe("parseHandsOn", () => {
     expect(plan.intro).toMatch(/^\*\*Predict first:\*\*/);
     expect(plan.project.map((p) => p.label)).toEqual(["What you'll have at the end", "Where to save it", "Ask your coding assistant to check it"]);
     expect(JSON.stringify(plan.tiers)).not.toMatch(/capstone/i);
+  });
+
+  it("reads the block form, keeping each tier's full markdown", () => {
+    const plan = parseHandsOn("**Predict first:** guess.\n\n:::tier guided\n:::step One\n**Do:** x\n:::\n:::\n\n:::tier partial\nLess help.\n:::\n\n:::tier solo\nNone.\n:::\n\n**Capstone branch:** \`b\`");
+    expect(plan!.tiers.map((t) => t.level)).toEqual(["guided", "partial", "solo"]);
+    expect(plan!.tiers[0].text).toBe(":::step One\n**Do:** x\n:::");
+    expect(plan!.project).toEqual([{ label: "Where to save it", text: "\`b\`" }]);
   });
 
   it("returns null for steps that don't follow the pattern", () => {

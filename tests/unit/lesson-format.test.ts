@@ -13,8 +13,8 @@ const messages = (m: ModuleContent) => {
 };
 
 describe("beginner lesson format", () => {
-  it("is used by Modules 1–11 (the capstone has no lesson)", () => {
-    expect(modules.filter((m) => m.hook).map((m) => m.id)).toEqual(["m01", "m02", "m03", "m04", "m05", "m06", "m07", "m08", "m09", "m10", "m11"]);
+  it("is used by Modules 0–11 (the capstone has no lesson)", () => {
+    expect(modules.filter((m) => m.hook).map((m) => m.id)).toEqual(["m00", "m01", "m02", "m03", "m04", "m05", "m06", "m07", "m08", "m09", "m10", "m11"]);
   });
 
   it("is all-or-nothing: a hook needs every other part", () => {
@@ -64,7 +64,8 @@ describe("pipeline spine", () => {
   });
 });
 
-const lessonModules = modules.filter((m) => m.hook);
+// Module 0 is set-up, not part of the subcontractor story.
+const lessonModules = modules.filter((m) => m.hook && m.id !== "m00");
 const onThread = (t: string) => /subcontractor|\bNDA\b|§\d|Permitted Recipient/.test(t);
 // Off-thread examples earlier drafts used: other businesses' documents and
 // other contracts. Every module stays on the one NDA.

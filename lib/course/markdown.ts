@@ -7,6 +7,13 @@
 //   a paragraph that is only **bold** becomes a small subheading
 //   :::key Title … :::    a highlighted "key idea" box
 //   :::more Title … :::   a "show more" expander, closed by default
+//   ```lang … ``` (or ~~~) a code box with a Copy button (commands, prompts, files)
+//   :::step Title … :::   one numbered step card (numbered in order on the page)
+//   :::mac / :::windows / :::linux … :::
+//                         text for one kind of computer; the page shows the
+//                         learner's chosen system (see components/lesson/System.tsx)
+//   :::video clip-id ::: (closing line)
+//                         a spot where a how-to video would help (content/video-clips.ts)
 
 import { GLOSSARY, type GlossaryTerm } from "@/content/glossary";
 
@@ -16,23 +23,42 @@ export type MdBlock =
   | { type: "list"; ordered: boolean; items: { text: string; children: MdBlock[] }[] }
   | { type: "quote"; blocks: MdBlock[] }
   | { type: "key"; title: string | null; blocks: MdBlock[] }
-  | { type: "more"; title: string; blocks: MdBlock[] };
+  | { type: "more"; title: string; blocks: MdBlock[] }
+  | { type: "code"; lang: string; text: string }
+  | { type: "step"; title: string; blocks: MdBlock[] }
+  | { type: "os"; os: OperatingSystem; blocks: MdBlock[] }
+  | { type: "video"; id: string };
+
+export const OPERATING_SYSTEMS = ["mac", "windows", "linux"] as const;
+export type OperatingSystem = (typeof OPERATING_SYSTEMS)[number];
 
 const LIST_ITEM = /^(\s*)([-*]|\d+\.)\s+(.*)$/;
 const FENCE_OPEN = /^:::(\w+)\s*(.*)$/;
 const FENCE_CLOSE = /^:::\s*$/;
 const QUOTE = /^>\s?/;
+const CODE_FENCE = /^(?:```|~~~)\s*([\w-]*)\s*$/;
+const CODE_CLOSE = /^(?:```|~~~)\s*$/;
 
 const topItem = (line: string) => {
   const m = line.match(LIST_ITEM);
   return m && m[1].length < 2 ? { ordered: /\d/.test(m[2]), text: m[3] } : null;
 };
-const startsBlock = (line: string) => FENCE_OPEN.test(line) || FENCE_CLOSE.test(line) || QUOTE.test(line) || topItem(line) !== null;
+const startsBlock = (line: string) =>
+  FENCE_OPEN.test(line) || FENCE_CLOSE.test(line) || QUOTE.test(line) || CODE_FENCE.test(line) || topItem(line) !== null;
 
 const dedent = (lines: string[]) => {
   const indent = Math.min(...lines.filter((l) => l.trim()).map((l) => l.match(/^\s*/)![0].length));
   return lines.map((l) => l.slice(Math.min(indent, l.match(/^\s*/)![0].length)));
 };
+
+/** Every block in a tree, depth first (for tests and checks). */
+export function walkBlocks(blocks: MdBlock[], visit: (b: MdBlock, parents: MdBlock[]) => void, parents: MdBlock[] = []) {
+  for (const b of blocks) {
+    visit(b, parents);
+    const kids = "blocks" in b ? b.blocks : b.type === "list" ? b.items.flatMap((it) => it.children) : [];
+    walkBlocks(kids, visit, [...parents, b]);
+  }
+}
 
 export function parseMarkdown(src: string): MdBlock[] {
   return parseLines(src.replace(/\r\n?/g, "\n").split("\n"));
@@ -48,17 +74,33 @@ function parseLines(lines: string[]): MdBlock[] {
       continue;
     }
 
+    const code = line.match(CODE_FENCE);
+    if (code) {
+      let j = i + 1;
+      while (j < lines.length && !CODE_CLOSE.test(lines[j])) j++;
+      out.push({ type: "code", lang: code[1] || "text", text: lines.slice(i + 1, j).join("\n") });
+      i = j + 1;
+      continue;
+    }
+
     const fence = line.match(FENCE_OPEN);
     if (fence) {
       let depth = 1;
       let j = i + 1;
+      let inCode = false;
       for (; j < lines.length; j++) {
-        if (FENCE_OPEN.test(lines[j])) depth++;
+        if (CODE_FENCE.test(lines[j])) inCode = !inCode;
+        else if (inCode) continue;
+        else if (FENCE_OPEN.test(lines[j])) depth++;
         else if (FENCE_CLOSE.test(lines[j]) && --depth === 0) break;
       }
       const blocks = parseLines(lines.slice(i + 1, j));
-      const title = fence[2].trim();
-      out.push(fence[1] === "more" ? { type: "more", title: title || "Show more", blocks } : { type: "key", title: title || null, blocks });
+      const [kind, title] = [fence[1], fence[2].trim()];
+      if (kind === "more") out.push({ type: "more", title: title || "Show more", blocks });
+      else if (kind === "step") out.push({ type: "step", title, blocks });
+      else if ((OPERATING_SYSTEMS as readonly string[]).includes(kind)) out.push({ type: "os", os: kind as OperatingSystem, blocks });
+      else if (kind === "video") out.push({ type: "video", id: title });
+      else out.push({ type: "key", title: title || null, blocks });
       i = j + 1;
       continue;
     }
@@ -191,6 +233,7 @@ export function termForCode(code: string): string | null {
 /** Plain text of a markdown string (for tests and search). */
 export function markdownText(src: string): string {
   return src
+    .replace(/^(?:```|~~~).*$/gm, "")
     .replace(/^:::\w*.*$/gm, "")
     .replace(/\*\*|`/g, "")
     .replace(/^\s*(?:[-*]|\d+\.|>)\s?/gm, "");

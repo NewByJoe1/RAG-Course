@@ -5,6 +5,7 @@ import type { LessonFailureCase } from "@/components/lesson/FailureCases";
 import type { WorkedStep } from "@/components/lesson/WorkedExample";
 import type { StudyPoint } from "@/components/lesson/StudyGuide";
 import { lessonTabs, type LessonTab } from "./lesson-tabs";
+import { isSetupModule } from "./setup";
 
 export type LessonStepRow = {
   id: string;
@@ -38,6 +39,8 @@ export type Lesson = {
   progress: { best_score: number | null; passed_at: string | null } | null;
   /** True for modules rewritten in the tabbed beginner format. */
   lessonFormat: boolean;
+  /** Module 0: set-up, finished by ticking "My setup works". */
+  isSetup: boolean;
   failures: LessonFailureCase[];
   worked: WorkedStep[];
   terms: GlossaryEntry[];
@@ -77,7 +80,8 @@ export const getLesson = cache(async (slug: string): Promise<Lesson | null> => {
     quizCount: quizCount ?? 0,
     progress: progress ?? null,
   };
-  if (!mod.hook) return { ...base, lessonFormat: false, failures: [], worked: [], terms: [], points: [], lastExplain: null, tabs: [] };
+  const isSetup = isSetupModule(mod.id);
+  if (!mod.hook) return { ...base, lessonFormat: false, isSetup, failures: [], worked: [], terms: [], points: [], lastExplain: null, tabs: [] };
 
   const [{ data: failures }, { data: worked }, { data: glossaryRows }, { data: points }, { data: lastExplain }] = await Promise.all([
     supabase
@@ -97,6 +101,7 @@ export const getLesson = cache(async (slug: string): Promise<Lesson | null> => {
   const lesson = {
     ...base,
     lessonFormat: true,
+    isSetup,
     failures: (failures ?? []) as LessonFailureCase[],
     worked: (worked ?? []) as WorkedStep[],
     terms,
@@ -113,6 +118,8 @@ export const getLesson = cache(async (slug: string): Promise<Lesson | null> => {
       glossary: terms.length,
       studyPoints: lesson.points.length,
       quizItems: base.quizCount,
+      goDeeper: (worked ?? []).length > 0 || (mod.pipeline_stages ?? []).length > 0,
+      setup: isSetup,
     }),
   };
 });

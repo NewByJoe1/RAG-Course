@@ -1,6 +1,9 @@
 import { Fragment, type ReactNode } from "react";
 import { findTerms, parseInline, parseMarkdown, termForCode, type Inline, type MdBlock } from "@/lib/course/markdown";
 import { Term } from "./Term";
+import { CodeBlock } from "./CodeBlock";
+import { OsBlock } from "./System";
+import { VideoMarker } from "./VideoMarker";
 
 /**
  * Lesson text renderer (see lib/course/markdown.ts for the dialect). The
@@ -23,20 +26,60 @@ export function Markdown({
   /** Share with sibling blocks so a term is only underlined once across them. */
   seen?: Set<string>;
 }) {
-  const ctx: Ctx = { seen: terms ? (seen ?? new Set()) : null, key: 0 };
+  const ctx: Ctx = { seen: terms ? (seen ?? new Set()) : null, key: 0, step: 0 };
   if (inline) return <>{renderInline(parseInline(text), ctx)}</>;
   const sizing = size === "sm" ? "space-y-3 text-sm leading-relaxed" : "space-y-5 text-[1.0625rem] leading-8";
   return <div className={`${sizing} text-neutral-700 dark:text-neutral-300`}>{renderBlocks(parseMarkdown(text), ctx, size)}</div>;
 }
 
-type Ctx = { seen: Set<string> | null; key: number };
+type Ctx = { seen: Set<string> | null; key: number; step: number };
+
+// Step cards label their parts in bold; the last two get a tint so the eye
+// finds "did it work?" and "what if it didn't?" quickly.
+const LABEL_STYLE: [RegExp, string][] = [
+  [/^\*\*You should see:\*\*/, "rounded-lg bg-emerald-50 px-3 py-2 dark:bg-emerald-950/40"],
+  [/^\*\*If it didn't work:\*\*/, "rounded-lg bg-amber-50 px-3 py-2 dark:bg-amber-950/40"],
+];
 
 function renderBlocks(blocks: MdBlock[], ctx: Ctx, size: "base" | "sm"): ReactNode[] {
   return blocks.map((b) => {
     const k = ctx.key++;
     switch (b.type) {
-      case "p":
-        return <p key={k}>{renderInline(parseInline(b.text), ctx)}</p>;
+      case "p": {
+        const tint = LABEL_STYLE.find(([re]) => re.test(b.text))?.[1];
+        return (
+          <p key={k} className={tint}>
+            {renderInline(parseInline(b.text), ctx)}
+          </p>
+        );
+      }
+      case "code":
+        return <CodeBlock key={k} lang={b.lang} text={b.text} />;
+      case "video":
+        return <VideoMarker key={k} id={b.id} />;
+      case "os":
+        return (
+          <OsBlock key={k} os={b.os}>
+            {renderBlocks(b.blocks, ctx, size)}
+          </OsBlock>
+        );
+      case "step": {
+        const n = ++ctx.step;
+        return (
+          <section key={k} aria-label={`Step ${n}: ${b.title}`} className="space-y-4 rounded-2xl border border-neutral-200 p-5 dark:border-neutral-800">
+            <h3 className="flex items-start gap-3 text-lg font-semibold tracking-tight text-neutral-900 dark:text-white">
+              <span aria-hidden className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-teal-700 text-sm text-white dark:bg-teal-400 dark:text-neutral-950">
+                {n}
+              </span>
+              <span>
+                <span className="sr-only">Step {n}: </span>
+                {b.title}
+              </span>
+            </h3>
+            <div className="space-y-4">{renderBlocks(b.blocks, ctx, size)}</div>
+          </section>
+        );
+      }
       case "h":
         return (
           <h4 key={k} className={`${size === "sm" ? "pt-1" : "pt-3"} font-semibold tracking-tight text-neutral-900 dark:text-white`}>

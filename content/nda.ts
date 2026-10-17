@@ -46,3 +46,22 @@ export const NDA_CLAUSES: Record<string, NdaClause> = {
 
 /** "§4.2(b) Permitted Disclosure, p.3" */
 export const cite = (c: NdaClause) => `${c.section} ${c.title}, p.${c.page}`;
+
+/**
+ * The whole NDA as one document, for learners to put in their project as
+ * data/nda.md (Module 1's hands-on). Each clause starts on its own line with
+ * its section number, so it chunks cleanly one clause at a time.
+ */
+export const NDA_DOCUMENT = [
+  `# ${NDA_TITLE}`,
+  ...[
+    NDA_CLAUSES.definitions,
+    NDA_CLAUSES.permittedRecipient,
+    NDA_CLAUSES.permittedDisclosure,
+    NDA_CLAUSES.contractors,
+    NDA_CLAUSES.compelledDisclosure,
+    NDA_CLAUSES.term,
+    NDA_CLAUSES.governingLaw,
+  ].map((c) => `${c.section} ${c.title} (page ${c.page})\n${c.text}`),
+  "Signature block (page 6)\nSigned for Acme Corp: ____________   Signed for Beta Ltd: ____________",
+].join("\n\n");

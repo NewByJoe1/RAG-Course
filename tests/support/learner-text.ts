@@ -27,5 +27,5 @@ export function learnerText(m: ModuleContent): string[] {
   ].filter(Boolean);
 }
 
-/** Inline code spans removed (file names and identifiers aren't prose). */
-export const prose = (t: string) => t.replace(/`[^`]*`/g, " ");
+/** Code removed (code boxes, inline code): commands and file names aren't prose. */
+export const prose = (t: string) => t.replace(/^(```|~~~)[^\n]*\n[\s\S]*?^(```|~~~)\s*$/gm, " ").replace(/`[^`]*`/g, " ");

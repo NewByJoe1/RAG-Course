@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { PIPELINE_STAGE_IDS } from "./pipeline";
 import { GLOSSARY } from "./glossary";
+import { SETUP_MODULE_ID } from "../lib/course/setup";
 
 /** Marks unwritten content. Modules containing it can't be published. */
 export const TODO_MARKER = "[TODO]";
@@ -169,7 +170,16 @@ export const moduleSchema = z
     if (new Set(m.glossary).size !== m.glossary.length) ctx.addIssue({ code: "custom", message: `${m.id}: duplicate glossary terms` });
 
     // The beginner lesson format: once a module has a hook, it needs every part.
-    if (m.hook !== null) {
+    if (m.hook !== null && m.id === SETUP_MODULE_ID) {
+      // Module 0 is set-up, not RAG: warm-up and steps, a glossary, no quiz.
+      const need = (ok: boolean, what: string) => ok || ctx.addIssue({ code: "custom", message: `${m.id} is the set-up module, so it needs ${what}` });
+      need(m.order_index === 0, "order_index 0");
+      need(m.lesson_steps[0]?.kind === "warm_up", "a warm_up lesson step first");
+      need(m.lesson_steps.length >= 4, "at least 3 set-up parts after the warm-up");
+      need(m.glossary.length >= 3, "at least 3 glossary terms");
+      need(!m.quiz_items.length && !m.failure_cases.length, "no quiz or failure cases (ticking \"My setup works\" unlocks Module 1)");
+      need(!m.pipeline_stages.length, "no pipeline stages");
+    } else if (m.hook !== null) {
       const need = (ok: boolean, what: string) => ok || ctx.addIssue({ code: "custom", message: `${m.id} has a hook, so it needs ${what}` });
       need(m.pipeline_stages.length > 0, "pipeline_stages");
       need(m.explain_back_prompt !== null, "an explain_back_prompt");

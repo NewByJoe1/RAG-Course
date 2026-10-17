@@ -24,13 +24,6 @@ export const terms: GlossaryTerm[] = [
     stage: "eval-guardrails",
   },
   {
-    id: "github",
-    term: "GitHub",
-    aliases: ["GitHub"],
-    definition: "A website that stores your project's code and its history, and can run checks on every change you send it.",
-    stage: null,
-  },
-  {
     id: "github-actions",
     term: "GitHub Actions",
     aliases: ["GitHub Actions"],

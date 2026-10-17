@@ -68,6 +68,8 @@ export async function createTestDb(opts: { upTo?: string; modules?: string[] } =
   // Seed real course content as the superuser (like scripts/seed.ts with the service role).
   for (const m of modules.filter((x) => !opts.modules || opts.modules.includes(x.id))) {
     const { lesson_steps, quiz_items, failure_cases, worked_example, glossary, study_guide, ...row } = m;
+    // Migration 0011 already made Module 0's row (unpublished); replace it with the content's.
+    await db.query(`delete from public.modules where id = $1`, [m.id]);
     await seed("modules", row);
     if (hasLessonFormat) {
       for (const w of worked_example ?? []) await seed("worked_example_steps", { code_snippet: null, code_language: null, stage: null, query_state: null, ...w, module_id: m.id });
@@ -105,7 +107,12 @@ export async function createTestDb(opts: { upTo?: string; modules?: string[] } =
     }
   }
 
-  return { db, as, createUser, migrateRest };
+  /** Tick "My setup works" (Module 0) for a learner, which unlocks Module 1. */
+  async function completeSetup(id: string) {
+    await as("authenticated", id, () => db.query(`select public.complete_setup()`));
+  }
+
+  return { db, as, createUser, completeSetup, migrateRest };
 }
 
 export async function insert(db: PGlite, table: string, row: Record<string, unknown>) {

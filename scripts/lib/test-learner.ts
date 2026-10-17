@@ -38,7 +38,7 @@ export type CreateOptions = {
   email: string;
   password: string;
   repo: string;
-  /** Module ids to mark passed (Modules 1–11). */
+  /** Module ids to mark passed (Modules 0–11). */
   moduleIds: string[];
   /** Unlink the repo from whoever has it (clears their capstone checks). */
   takeOverRepo?: boolean;

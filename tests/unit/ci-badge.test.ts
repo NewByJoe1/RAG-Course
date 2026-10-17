@@ -10,6 +10,7 @@ describe("branchForModule", () => {
     const published = modules.filter((m) => m.is_published).sort((a, b) => a.order_index - b.order_index);
     const mapping = Object.fromEntries(published.map((m) => [m.id, branchForModule(m.order_index)]));
     expect(mapping).toEqual({
+      m00: null, // set-up: no branch
       m01: "naive-rag",
       m02: "pre-retrieval",
       m03: "hybrid-retrieval",

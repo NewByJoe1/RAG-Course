@@ -3,6 +3,8 @@
 //
 //   overview · Part 1 … Part n · Practice · Go deeper · Hands-on · Glossary · Study guide · Module quiz
 //
+// Module 0 (set-up) ends with "Check your setup" instead of a quiz.
+//
 // The warm-up lives on the overview and the hands-on step(s) on their own
 // tab, so "parts" are the remaining lesson steps.
 
@@ -15,7 +17,7 @@ export const partSteps = <S extends StepLite>(steps: S[]) => steps.filter((s) =>
 export const handsOnSteps = <S extends StepLite>(steps: S[]) => steps.filter((s) => s.kind === "exercise");
 
 /** Tab keys that aren't lesson parts. "study-guide" and "quiz" are taken by other routes. */
-export const FIXED_TABS = ["practice", "go-deeper", "hands-on", "glossary", "study"] as const;
+export const FIXED_TABS = ["practice", "go-deeper", "hands-on", "glossary", "study", "setup-check"] as const;
 
 export function lessonTabs(m: {
   slug: string;
@@ -25,6 +27,10 @@ export function lessonTabs(m: {
   glossary: number;
   studyPoints: number;
   quizItems: number;
+  /** Worked example steps or pipeline stages to show under "Go deeper". */
+  goDeeper?: boolean;
+  /** Module 0: finish with "Check your setup". */
+  setup?: boolean;
 }): LessonTab[] {
   const base = `/modules/${m.slug}`;
   const tab = (key: string, label: string): LessonTab => ({ key, href: `${base}/${key}`, label });
@@ -32,11 +38,12 @@ export function lessonTabs(m: {
     { key: "overview", href: base, label: m.title },
     ...partSteps(m.steps).map((s, i) => tab(`part-${i + 1}`, s.title)),
     ...(m.failures ? [tab("practice", "Practice: when it goes wrong")] : []),
-    tab("go-deeper", "Go deeper"),
+    ...(m.goDeeper !== false ? [tab("go-deeper", "Go deeper")] : []),
     ...(handsOnSteps(m.steps).length ? [tab("hands-on", "Hands-on")] : []),
     ...(m.glossary ? [tab("glossary", "Glossary")] : []),
     ...(m.studyPoints ? [tab("study", "Study guide")] : []),
     ...(m.quizItems ? [tab("quiz", "Module quiz")] : []),
+    ...(m.setup ? [tab("setup-check", "Check your setup")] : []),
   ];
 }
 

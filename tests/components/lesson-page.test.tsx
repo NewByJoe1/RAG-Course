@@ -31,7 +31,7 @@ vi.mock("@/lib/supabase/server", () => ({
       };
       const result = { data: data[table] ?? [], count: table === "quiz_items" ? m.quiz_items.length : null, error: null };
       const q: Record<string, unknown> = {};
-      for (const k of ["select", "eq", "order", "limit"]) q[k] = () => q;
+      for (const k of ["select", "eq", "gt", "order", "limit"]) q[k] = () => q;
       q.maybeSingle = async () => result;
       q.single = async () => result;
       q.then = (r: (v: unknown) => void) => r(result);
@@ -43,7 +43,7 @@ vi.mock("@/lib/supabase/server", () => ({
 import ModulePage from "@/app/modules/[slug]/page";
 import ModuleLayout from "@/app/modules/[slug]/layout";
 import LessonTabPage from "@/app/modules/[slug]/[page]/page";
-import { partSteps } from "@/lib/course/lesson-tabs";
+import { lessonTabs, partSteps } from "@/lib/course/lesson-tabs";
 
 afterEach(cleanup);
 beforeEach(() => {
@@ -164,8 +164,8 @@ describe("tabbed lesson: pages", () => {
   it("hands-on: the three tiers, revealed one at a time", async () => {
     await show("hands-on");
     expect(screen.getByRole("heading", { level: 1, name: "Hands-on: try it yourself" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { level: 4, name: "Start here" })).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { level: 4, name: "On your own" })).toBeNull();
+    expect(screen.getByRole("heading", { level: 2, name: "Start here" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { level: 2, name: "On your own" })).toBeNull();
     const [back, next] = within(pager()).getAllByRole("link");
     expect(back).toHaveAttribute("href", "/modules/rag-foundations/go-deeper");
     expect(next).toHaveAttribute("href", "/modules/rag-foundations/glossary");
@@ -218,9 +218,20 @@ describe("modules not in the lesson format", () => {
 });
 
 describe("every module, every tab", () => {
-  const pages = ["", "part-1", "part-2", "part-3", "part-4", "part-5", "practice", "go-deeper", "hands-on", "glossary", "study"];
+  const pagesOf = (m: typeof m01) =>
+    lessonTabs({
+      slug: m.slug,
+      title: m.title,
+      steps: m.lesson_steps,
+      failures: m.failure_cases.length,
+      glossary: m.glossary?.length ?? 0,
+      studyPoints: m.study_guide?.length ?? 0,
+      quizItems: 0, // the quiz has its own page
+      goDeeper: (m.worked_example?.length ?? 0) > 0 || (m.pipeline_stages?.length ?? 0) > 0,
+      setup: m.id === "m00",
+    }).map((t) => (t.key === "overview" ? "" : t.key));
   it.each(modules.filter((m) => m.id !== "m12").map((m) => [m.id, m] as const))("%s renders every tab with no raw markdown", async (_id, m) => {
-    for (const page of m.hook ? pages : [""]) {
+    for (const page of m.hook ? pagesOf(m) : [""]) {
       const { container } = await show(page || undefined, m);
       expect(container.textContent, `${m.id}/${page}`).not.toMatch(/\*\*|:::/);
       cleanup();

@@ -1,6 +1,6 @@
 /**
  * Create (or refresh) a test learner for checking the reviewer flow:
- * Modules 1–11 passed and a capstone repo linked. Safe to re-run.
+ * Modules 0–11 passed and a capstone repo linked. Safe to re-run.
  *
  *   TEST_LEARNER_EMAIL=you+test-learner@example.com npm run test-learner:create
  *   … -- --repo=owner/name        repo to link (default NewByJoe1/capstone-test-2)
@@ -32,9 +32,9 @@ async function main() {
   const repo = normalizeGithubRepo(opt("repo") ?? process.env.TEST_LEARNER_REPO ?? "NewByJoe1/capstone-test-2");
   if (!repo) throw new Error("--repo must be owner/name.");
 
-  // Modules 1–11: every published module except the capstone (m12).
-  const moduleIds = modules.filter((m) => m.is_published && m.order_index >= 1 && m.order_index <= 11).map((m) => m.id);
-  if (moduleIds.length !== 11) throw new Error(`Expected 11 modules to mark passed, found ${moduleIds.length}.`);
+  // Modules 0–11: set-up and every published lesson module, not the capstone (m12).
+  const moduleIds = modules.filter((m) => m.is_published && m.order_index >= 0 && m.order_index <= 11).map((m) => m.id);
+  if (moduleIds.length !== 12) throw new Error(`Expected 12 modules to mark passed, found ${moduleIds.length}.`);
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;

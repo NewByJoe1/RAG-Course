@@ -1,5 +1,6 @@
 import type { ModuleContent } from "../types";
-import { cite, NDA_CLAUSES as C, RUNNING_QUESTION } from "../nda";
+import { cite, NDA_CLAUSES as C, NDA_DOCUMENT, RUNNING_QUESTION } from "../nda";
+import { md } from "../md";
 
 // Module 1, rewritten on the running example: one NDA (Acme Corp and Beta Ltd)
 // and one question, "Can we share this with a subcontractor?". It sets up what
@@ -151,17 +152,200 @@ Question: {question}`,
       order_index: 6,
       kind: "exercise",
       title: "Hands-on: try it yourself",
-      body_md: `**Predict first:** which clause do you think the simple system will rank first for "${RUNNING_QUESTION}"? Write your guess down before you start.
+      body_md: md`**Predict first:** which clause do you think the simple system will rank first for "${RUNNING_QUESTION}"? Write your guess down before you start.
 
-- **Guided:** Build an index of the NDA with one clause per chunk. Ask the subcontractor question and write down the top 5 clauses it returns, with their scores.
-- **Partial:** Now cut the NDA into chunks by size instead of by clause: about 150, 500 and 1,500 tokens (a token is roughly three-quarters of a word). Each time, note where ${C.permittedDisclosure.section} ranks, and whether any chunk cuts it in half.
-- **Solo:** Write \`prompts/generate.md\` with the three rules. Run it on the top 3 chunks, then check every citation against the NDA yourself.
+:::tier guided
+:::step Open your project and make this module's branch
+**Where:** in your terminal (see Module 0 if you need a reminder of how to open it).
 
-**Files you create:** \`index/\`, the folder that holds your searchable index, and \`prompts/generate.md\`, your prompt file.
+**Do:** go into your project folder, then make a **branch** called \`naive-rag\` for this module. A branch is a named copy of your code; this one will hold Module 1's version, so later modules can't spoil it.
+
+~~~bash
+cd rag-course-project
+git switch -c naive-rag
+~~~
+
+**You should see:** \`Switched to a new branch 'naive-rag'\`.
+
+**If it didn't work:** if it says the branch already exists, you've started this before: run \`git switch naive-rag\` instead. If \`cd\` can't find the folder, open a new terminal (it starts in your home folder) and try again.
+:::
+
+:::step Install uv, which runs Python for you
+The code in this course is written in **Python**, a popular programming language. You don't need to install Python yourself: **uv** is a free tool that fetches Python and any **library** (ready-made code) a project needs, then runs it. Claude Code will use it.
+
+:::mac
+**Where:** in your terminal.
+
+**Do:** paste this and press Enter. It's the official installer from astral.sh, the makers of uv.
+
+~~~bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+~~~
+
+Then close the terminal, open a new one, go back into your project with \`cd rag-course-project\`, and check:
+
+~~~bash
+uv --version
+~~~
+
+**You should see:** a line starting \`uv\` and a version number, such as \`uv 0.9.0\`.
+
+**If it didn't work:** "command not found: uv" usually means the old window is still open: close every terminal window, open a new one and try again.
+:::
+:::windows
+**Where:** in PowerShell.
+
+**Do:** paste this and press Enter. It's the official installer from astral.sh, the makers of uv.
+
+~~~powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+~~~
+
+Then close PowerShell, open a new window, go back into your project with \`cd rag-course-project\`, and check:
+
+~~~powershell
+uv --version
+~~~
+
+**You should see:** a line starting \`uv\` and a version number, such as \`uv 0.9.0\`.
+
+**If it didn't work:** "uv is not recognized" usually means the old window is still open: close PowerShell completely, open a new window and try again.
+:::
+:::linux
+**Where:** in your terminal.
+
+**Do:** paste this and press Enter. It's the official installer from astral.sh, the makers of uv.
+
+~~~bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+~~~
+
+Then close the terminal, open a new one, go back into your project with \`cd rag-course-project\`, and check:
+
+~~~bash
+uv --version
+~~~
+
+**You should see:** a line starting \`uv\` and a version number, such as \`uv 0.9.0\`.
+
+**If it didn't work:** "command not found: uv" usually means the old window is still open: close every terminal window, open a new one and try again.
+:::
+:::
+
+:::video m01-install-uv
+:::
+
+:::step Tell Git your name (only once, ever)
+**Where:** in your terminal, inside \`rag-course-project\`.
+
+**Do:** Git writes a name and email on every **commit** (a saved snapshot of your work). Paste these two lines, but first change the parts in quotes to your own name and the email you used for GitHub.
+
+~~~bash
+git config --global user.name "Your Name"
+git config --global user.email "you@example.com"
+~~~
+
+**You should see:** nothing at all. With these commands, no message means it worked. To check, run \`git config --global user.name\`: it prints your name.
+
+**If it didn't work:** if your name prints wrongly, just run the first line again with the right name.
+:::
+
+:::step Put the NDA in your project
+**Where:** in Claude Code. Start it from your project folder:
+
+~~~bash
+claude
+~~~
+
+**Do:** copy the whole box below (it's long: the Copy button takes all of it), paste it into Claude Code, and press Enter.
+
+~~~prompt
+Create the file data/nda.md containing exactly the text below, with nothing added or changed.
+
+${NDA_DOCUMENT}
+~~~
+
+Claude Code asks before it creates or changes a file. When it asks, check it's the file you expected and choose **Yes** (press Enter).
+
+**You should see:** Claude Code saying it created \`data/nda.md\`. That's the NDA this whole course is about, now in your project.
+
+**If it didn't work:** if Claude Code shows only part of the text, ask it: "Please check data/nda.md matches the text I gave you exactly, and fix it if not."
+:::
+
+:::step Ask Claude Code to build the simple search
+**Where:** in Claude Code, still in your project.
+
+**Do:** paste this and press Enter.
+
+~~~prompt
+Build the simplest retrieval pipeline for this project, in Python, run with uv.
+- Split data/nda.md into chunks, one clause per chunk. Each clause starts on its own line with its section number (like §4.2(b)) or "Signature block".
+- Embed every chunk with the fastembed library and the model BAAI/bge-small-en-v1.5, and save the vectors, with each chunk's section, title and page, in a folder called index/.
+- In rag.py, write retrieve(question, k): embed the question with the same model and return the k chunks with the highest cosine similarity, with their scores.
+- Make ask.py so that running: uv run ask.py "a question" prints the top 5 chunks, one per line, as: score, section, title.
+Don't write an answer yet, only the search. When it works, run it with the question "Can we share this with a subcontractor?" and show me the output.
+~~~
+
+**You should see:** Claude Code planning, then asking your permission to create files and run commands: choose **Yes** each time. The first run downloads a small embedding model, which takes a minute. It ends with five lines, each a score between 0 and 1, a section number and a title. Your scores won't match the lesson's exactly, and that's fine. Notice where §4.2(b) lands.
+
+**If it didn't work:** if it stops with an error it doesn't fix by itself, copy the error, paste it back, and add "Please fix this." If it can't find uv, finish step 2 first, then start Claude Code again.
+:::
+
+:::video m01-first-build
+:::
+
+:::step Run the search yourself
+**Where:** in your terminal. Leave Claude Code first: type \`/exit\` and press Enter.
+
+**Do:** run the search with the course's question:
+
+~~~bash
+uv run ask.py "Can we share this with a subcontractor?"
+~~~
+
+**You should see:** the same five lines as before. Write down the five clauses in order, and where §4.2(b) Permitted Disclosure ranks.
+
+**If it didn't work:** "No such file" means you're not in the project folder (\`cd rag-course-project\`), or Claude Code named the file differently: start \`claude\` and ask "What command runs the search?"
+:::
+
+:::step Save your work and send it to GitHub
+**Where:** in your terminal, inside \`rag-course-project\`.
+
+**Do:** run these three lines one at a time. The first picks up every new and changed file, the second **commits** them (saves a snapshot with a note), and the third **pushes** the branch to GitHub, so it's backed up.
+
+~~~bash
+git add -A
+git commit -m "Module 1: simple search over the NDA"
+git push -u origin naive-rag
+~~~
+
+**You should see:** after the commit, a line like \`[naive-rag 1a2b3c4] Module 1: simple search over the NDA\`. After the push, a line saying the branch \`naive-rag\` is set up to track \`origin/naive-rag\`. On GitHub, your project now has a \`naive-rag\` branch.
+
+**If it didn't work:** "Please tell me who you are" means step 3 was skipped: do it, then run the commit line again. If the push asks for a username or password, your terminal isn't signed in to GitHub: run \`gh auth login\` (Module 0, Part 3) and push again.
+:::
+
+:::video m01-commit-push
+:::
+:::
+
+:::tier partial
+Now cut the NDA by size instead of by clause, and see what that does to §4.2(b).
+
+1. Start Claude Code in your project, as in Guided step 4, and ask it to add a way to rebuild the index with fixed-size chunks of about 150, 500 or 1,500 tokens (a token is roughly three-quarters of a word), instead of one clause per chunk.
+2. For each size, rebuild the index and run the search from Guided step 6. Note where ${C.permittedDisclosure.section} ranks, and whether any chunk cuts it in half.
+3. Put the index back to one clause per chunk, then save and push your work, as in Guided step 7.
+:::
+
+:::tier solo
+Write the writer. Create \`prompts/generate.md\`, a plain text file holding the three rules from this lesson. Ask Claude Code to add \`generate()\`: it sends the top 3 chunks and the question to Claude by running Claude Code itself in print mode (\`claude -p\`), so you don't need any other account. Run it on the subcontractor question, check every citation against \`data/nda.md\` yourself, then commit and push.
+:::
+
+**Files you create:** \`data/nda.md\`, the NDA; \`index/\`, the folder that holds your searchable index; \`rag.py\` and \`ask.py\`, your code; and \`prompts/generate.md\`, your prompt file.
 
 **Capstone branch:** save this work on a branch called \`naive-rag\` in your course project. A branch is a named copy of your code, so each module's version stays separate. It needs two functions: \`retrieve()\`, which finds clauses, and \`generate()\`, which writes the answer.
 
 **Check it with your assistant:** ask your coding assistant, "Does my naive-rag branch chunk the NDA by clause, use one embedding model for both the index and the question, and answer only from numbered, cited chunks?"`,
+
     },
     {
       id: "m01-s07",
@@ -263,6 +447,7 @@ So this is a **retrieval miss**: the right clause existed, but the search didn't
     "disclosing-party", "receiving-party", "affiliate", "amendment", "notwithstanding", "written-consent", "signature-block",
     "rag", "language-model", "prompt", "prompt-file", "pdf", "chunk", "embedding", "vector", "cosine-similarity", "index",
     "keyword-search", "grounding", "citation", "retrieval-miss", "re-rank", "token", "function", "branch", "database",
+    "terminal", "folder", "command", "powershell", "install", "uv", "python", "library", "claude-code", "git", "github", "commit", "push",
   ],
 
   study_guide: [

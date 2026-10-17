@@ -38,9 +38,9 @@ export function HandsOn({ plan }: { plan: HandsOnPlan }) {
                   Try this · {i + 1} of {total}
                   {done && <span className="ml-2 normal-case tracking-normal text-neutral-500">✓ done</span>}
                 </p>
-                <h4 ref={i === shown - 1 ? latest : undefined} tabIndex={-1} className="mt-1 text-lg font-semibold tracking-tight text-neutral-900 focus:outline-none dark:text-white">
+                <h2 ref={i === shown - 1 ? latest : undefined} tabIndex={-1} className="mt-1 text-xl font-semibold tracking-tight text-neutral-900 focus:outline-none dark:text-white">
                   {copy.title}
-                </h4>
+                </h2>
                 <p className="text-sm text-neutral-500">{copy.hint}</p>
               </div>
               <Markdown text={t.text} />

@@ -10,6 +10,9 @@ import { ExplainBack } from "@/components/lesson/ExplainBack";
 import { StudyGuide } from "@/components/lesson/StudyGuide";
 import { FailureCases } from "@/components/lesson/FailureCases";
 import { LessonPager, StepBody, TabHeader } from "@/components/lesson/LessonPage";
+import { SetupCheck } from "@/components/lesson/SetupCheck";
+import { createClient } from "@/lib/supabase/server";
+import { partSteps as setupParts } from "@/lib/course/lesson-tabs";
 
 // Tabs 2 onwards of a lesson-format module: /modules/<slug>/<page>, where
 // <page> is part-1 … part-n, practice, go-deeper, hands-on, glossary or study.
@@ -92,6 +95,24 @@ export default async function LessonTabPage({ params }: { params: { slug: string
         <TabHeader kicker="Remember" title="Study guide" intro="The points to remember. Check your warm-up answers against them, then explain it back in your own words." />
         <StudyGuide points={lesson.points} scriptHref={`/modules/${mod.slug}/study-guide`} heading={false} />
         {mod.explain_back_prompt && lesson.user && <ExplainBack moduleId={mod.id} prompt={mod.explain_back_prompt} previous={lesson.lastExplain} />}
+      </>
+    );
+  } else if (params.page === "setup-check" && lesson.isSetup) {
+    const { data: next } = await createClient()
+      .from("modules")
+      .select("slug")
+      .gt("order_index", mod.order_index)
+      .order("order_index")
+      .limit(1)
+      .maybeSingle();
+    body = (
+      <>
+        <TabHeader kicker={kicker} title="Check your setup" intro="Run through these once more. When they all work, tick the box: that unlocks Module 1. There's no quiz here." />
+        <SetupCheck
+          checks={setupParts(lesson.steps).map((s) => s.title)}
+          doneAt={lesson.progress?.passed_at ?? null}
+          nextHref={next ? `/modules/${next.slug}` : "/"}
+        />
       </>
     );
   } else notFound();
