@@ -58,4 +58,11 @@ export const terms: GlossaryTerm[] = [
     definition: "A file of code you run one block at a time, with notes and results shown in between.",
     stage: null,
   },
+  {
+    id: "hugging-face",
+    term: "Hugging Face",
+    aliases: ["Hugging Face"],
+    definition: "A website where people share free datasets and AI models. The datasets library downloads from it.",
+    stage: null,
+  },
 ];

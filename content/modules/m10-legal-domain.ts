@@ -1,5 +1,6 @@
 import type { ModuleContent } from "../types";
 import { cite, NDA_CLAUSES as C, RUNNING_QUESTION } from "../nda";
+import { md } from "../md";
 
 // Module 10, rewritten on the running example. After Module 9 the system finds
 // §4.5, §4.2(b) and §1.4 and every quote is real, yet the answer argues with
@@ -222,17 +223,172 @@ Question: {question}`,
       order_index: 6,
       kind: "exercise",
       title: "Hands-on: try it yourself",
-      body_md: `**Predict first:** before you add any legal rules, ask your system "${RUNNING_QUESTION}" again. Will it offer one route or two? Write your guess down, then check.
+      body_md: md`**Predict first:** before you add any legal rules, ask your system "${RUNNING_QUESTION}" again. Will it offer one route or two? Write your guess down, then check it in Guided step 2.
 
-- **Guided:** Run the parser on the NDA and look at the tree it builds. Find ${C.permittedDisclosure.section} and check it's one whole clause, with its section number and page ${C.permittedDisclosure.page}.
-- **Partial:** Add definition resolution: when a clause uses a defined term, attach the definition. Check that ${C.permittedDisclosure.section} now carries the definition of "Permitted Recipient" from ${C.permittedRecipient.section}.
-- **Solo:** Add the override rule. Label ${C.contractors.section} as overriding §4.2, pull it in whenever ${C.permittedDisclosure.section} is found, and write a test that fails if the subcontractor answer ever offers a route through ${C.permittedDisclosure.section} again.
+:::tier guided
+:::step Open your project and make this module's branch
+**Where:** in your terminal (see Module 0 if you need a reminder of how to open it).
 
-**Files you create:** \`config/taxonomy.yaml\`, a plain text list of the NDA's defined terms and override words that your code reads, and new legal rules in the judge prompts from Module 7, the instruction files the grading model follows.
+**Do:** go into your project folder, then make a **branch** called \`legal-domain\` for this module. Module 9 left you on its \`harness\` branch, so the new branch starts from everything you've built so far.
 
-**Capstone branch:** save this work on a branch called \`legal-domain\` in your course project. It needs the parser, the definition resolver, the citation object and the extra check that blocks answers relying on an overridden clause.
+~~~bash
+cd rag-course-project
+git switch -c legal-domain
+~~~
 
-**Check it with your assistant:** ask your coding assistant, "Does my legal-domain branch load config/taxonomy.yaml, use it when rewriting and tagging the question, and save the taxonomy's version number with the index so I know which list built it?"`,
+**You should see:** \`Switched to a new branch 'legal-domain'\`.
+
+**If it didn't work:** if it says the branch already exists, you've started this before: run \`git switch legal-domain\` instead. To check you started from the right place, run \`git log --oneline -1\`: it should show your Module 9 commit. If it doesn't, run \`git switch harness\`, then \`git switch -C legal-domain\`, which makes the branch again from there.
+:::
+
+:::step See the answer argue with itself
+**Where:** in your terminal, inside \`rag-course-project\`.
+
+**Do:** ask the course's question, as you have since Module 2. Nothing has changed yet: this is your "before".
+
+~~~bash
+uv run ask.py "${RUNNING_QUESTION}"
+~~~
+
+**You should see:** after up to a minute, the clauses it found, the tag it gave the question, and an answer. Most likely the answer offers two routes, something like "yes under ${C.permittedDisclosure.section}… but contractors need consent under ${C.contractors.section}". Write down whether yours offers one route or two, and which tag it got.
+
+**If it didn't work:** if your answer already says no, that's fine: write it down. It's right by luck, because nothing in your code knows which clause wins yet. If you see an error about a missing file, check where your branch started, as in step 1.
+:::
+
+:::step Teach it to read the NDA as clauses
+**Where:** in Claude Code. Start it from your project folder:
+
+~~~bash
+claude
+~~~
+
+**Do:** paste this and press Enter. It builds a **parser**: code that reads the NDA into a tree of sections and clauses, and notes the two things lawyers look for, **defined terms** (words the contract gives its own meaning, like "Permitted Recipient") and **override words** (like "Notwithstanding").
+
+~~~prompt
+Add clause-aware parsing to this project, in a new file legal.py, run with uv.
+- Create config/taxonomy.yaml, a plain list the code reads. Give it "version: 1" and these override words, each with what it does: "Notwithstanding Section X" (this clause wins over Section X), "Subject to Section X" (this clause gives way to Section X) and "Except as provided in Section X" (Section X is an exception to this clause).
+- In legal.py, write parse_clauses(path). It reads data/nda.md, where each clause starts on its own line with its section number (like §4.2(b)) or "Signature block", then its title and "(page N)". Keep each clause whole, and store its id, section, parent section (§4.2(b) and §4.5 both belong to §4), title, page and text.
+- Find the defined terms: a sentence shaped like "Some Term" means ... is a definition. Store each term with the section that defines it and its meaning.
+- For every clause, store "uses": the defined terms it uses that are defined in a different clause, each with that section and meaning. Also store "overrides": the section it overrides, found with the override words from config/taxonomy.yaml (so §4.5's "Notwithstanding Section 4.2" gives §4.2).
+- Running: uv run legal.py prints the clauses as a tree, grouped by top-level section, one line per clause: section, title, page, then any "overrides §X" and "uses: Term (§Y)" labels.
+Run it and show me the output.
+~~~
+
+Claude Code asks your permission before it creates a file or runs a command. Check it's what you expected and choose **Yes** each time.
+
+**You should see:** a tree of about a dozen lines: §1 with ${C.definitions.section} and ${C.permittedRecipient.section} under it, §4 with ${C.permittedDisclosure.section} and ${C.contractors.section} under it, then ${C.compelledDisclosure.section}, ${C.term.section}, ${C.governingLaw.section} and the signature block. ${C.permittedDisclosure.section} is one whole clause on page ${C.permittedDisclosure.page}, labelled with "uses: Permitted Recipient (${C.permittedRecipient.section})". ${C.contractors.section} is labelled "overrides §4.2". Most clauses also use "Confidential Information (${C.definitions.section})".
+
+**If it didn't work:** if ${C.contractors.section} has no "overrides" label, the override words weren't matched. Tell Claude Code: "§4.5 starts with Notwithstanding Section 4.2 but isn't labelled as overriding §4.2. Please fix this." If a clause is split in two or missing, ask it to check parse_clauses() against data/nda.md.
+:::
+
+:::video m10-clause-tree
+:::
+
+:::step Give the pipeline the two lawyer's rules
+**Where:** in Claude Code, still in your project.
+
+**Do:** paste this and press Enter. It puts the parser to work: a defined term's meaning travels with every clause that uses it, a clause that says "Notwithstanding" is always brought in and read first, and those questions go to your strongest model.
+
+~~~prompt
+Now use legal.py when answering. Keep everything that already works: rewriting, keyword and meaning search, cleaning, re-ranking and the Module 9 checks.
+1. Rebuild index/ from parse_clauses(), with the same embedding model as before, so every chunk keeps its section, title, page, "uses" and "overrides" labels. Rebuild the keyword search from the same chunks.
+2. Defined terms: when rewrite_query() rewrites the question, also spell out any defined term in it with its meaning (so "Permitted Recipient" becomes "employee, officer or professional adviser"). When a chunk goes to generate(), add the definitions it uses under it, as: Definition (§1.4): ...
+3. Precedence: after re-ranking, if a chosen chunk is overridden by another clause (like §4.2(b) by §4.5), add that clause if it's missing, put it first, and mark it "overrides §4.2".
+4. Routing: whenever the chosen chunks include a clause that overrides another, set the tag to conflicting, whatever tag_question() said. Check that config/models.yaml sends conflicting questions to opus.
+5. Add these two rules to prompts/generate.md, under the ones already there:
+- If a chunk is marked "overrides §X", it wins over §X for the case it covers. Never offer §X as a second route for that case.
+- A capitalised defined term means only what its attached definition says. Check the definition before saying someone qualifies.
+Then run: uv run ask.py "Can we share this with a subcontractor?" and show me the output.
+~~~
+
+**You should see:** Claude Code changing several files, asking each time (choose **Yes**). In the run, ${C.contractors.section} comes first, marked "overrides §4.2", and the tag is conflicting. The answer gives one route only: not without the Disclosing Party's prior written consent (${C.contractors.section}), because a subcontractor isn't a Permitted Recipient (${C.permittedRecipient.section}). Your wording will differ, and that's fine. What matters is that it no longer says "yes under ${C.permittedDisclosure.section}". The strongest model is slower, so allow up to a minute.
+
+**If it didn't work:** if it still offers ${C.permittedDisclosure.section} as a route, look at the clauses it lists. If ${C.contractors.section} isn't first and marked, tell Claude Code: "§4.5 should come first, marked overrides §4.2. Please fix this." If it says the opus model isn't available to you, ask Claude Code to send conflicting questions to sonnet instead.
+:::
+
+:::step Return citations a lawyer can check
+**Where:** in Claude Code.
+
+**Do:** paste this and press Enter. Every claim in the answer will come back as a **citation object**: a small record holding the section, its title, the page and the exact quote, plus whether that quote really is in the NDA, word for word.
+
+~~~prompt
+Make every answer come back with citation objects.
+- In legal.py, add a Citation record with: clause_id, section, title, page, quote (the exact words the claim relies on) and verified (true only if the quote appears word for word in data/nda.md).
+- Change generate() so Claude returns the answer plus, for each claim, the section and the exact quote it relies on. Turn each one into a Citation, taking the title and page from parse_clauses(). Use the citation check from Module 9 to set verified.
+- Make ask.py print, after the answer, one line per citation: section, title, page, ✓ or ✗, and the quote.
+Then run: uv run ask.py "Can we share this with a subcontractor?" and show me the output.
+~~~
+
+**You should see:** the same answer as in step 4, then two or three citation lines, such as \`§4.5 Contractors (Amendment No. 1), page 3 ✓\` followed by the quoted words. Every line should have a ✓.
+
+**If it didn't work:** a ✗ means that quote isn't word for word in the NDA. Tell Claude Code: "One citation has a ✗. Make generate() ask Claude for exact quotes only, then run it again." If no citation lines appear at all, ask it: "Where does ask.py print the citations?"
+:::
+
+:::step Ask the question yourself
+**Where:** in your terminal. Leave Claude Code first: type \`/exit\` and press Enter.
+
+**Do:** ask the course's question again:
+
+~~~bash
+uv run ask.py "${RUNNING_QUESTION}"
+~~~
+
+**You should see:** in this order: the clauses, with ${C.contractors.section} first, marked "overrides §4.2"; the tag conflicting; one answer saying no, not without the Disclosing Party's prior written consent; and the citation lines, each with a ✓. Compare it with what you wrote down in step 2: one route instead of two. That's the answer a lawyer gave in this module's lesson.
+
+**If it didn't work:** "No such file" means you're not in the project folder: run \`cd rag-course-project\` and try again. If the answer is worded differently from step 5, that's normal: answers vary a little each time. The route mustn't change, though. If it does, start \`claude\` and paste the output with "The answer offered §4.2(b) as a route again. Why?"
+:::
+
+:::video m10-correct-answer
+:::
+
+:::step Re-run your golden set
+**Where:** in your terminal, inside \`rag-course-project\`.
+
+**Do:** run the evaluation you built in Module 7. It asks every question in your **golden set** and scores the answers, so you can see the new rules didn't break anything else.
+
+~~~bash
+uv run evaluate.py
+~~~
+
+**You should see:** after a few minutes (it asks Claude about every question), the three scores from Module 7: recall@3, citation accuracy and groundedness, each a number between 0 and 1. It also updates \`eval/answers.json\` and \`eval/metrics.json\`, so the check that runs on GitHub (Module 8) now sees the correct subcontractor answer.
+
+**If it didn't work:** if it can't find \`evaluate.py\`, start \`claude\` and ask "What command runs my evaluation from Module 7?", then run that. If a score dropped a lot since Module 9, paste the output into Claude Code and ask "Which golden-set question got worse, and why?"
+:::
+
+:::step Save your work and send it to GitHub
+**Where:** in your terminal, inside \`rag-course-project\`.
+
+**Do:** run these three lines one at a time. The first picks up every new and changed file, the second **commits** them (saves a snapshot with a note), and the third **pushes** the branch to GitHub, so it's backed up.
+
+~~~bash
+git add -A
+git commit -m "Module 10: legal reading rules and the correct subcontractor answer"
+git push -u origin legal-domain
+~~~
+
+**You should see:** after the commit, a line like \`[legal-domain 1a2b3c4] Module 10: legal reading rules and the correct subcontractor answer\`. After the push, a line saying the branch \`legal-domain\` is set up to track \`origin/legal-domain\`. On GitHub, your project now has a \`legal-domain\` branch, and the evaluation from Module 8 runs on it.
+
+**If it didn't work:** if the push asks for a username or password, your terminal isn't signed in to GitHub: run \`gh auth login\` (Module 0, Part 3) and push again. If the commit says "nothing to commit", Claude Code's changes weren't saved: start \`claude\` and ask "Which files did you change?"
+:::
+:::
+
+:::tier partial
+Check the new rules don't just say no to everything, and teach the system when to hand a question to a lawyer.
+
+1. Ask about someone who is a Permitted Recipient, the same way as in Guided step 6: \`uv run ask.py "Can our own employees see this?"\`. A lawyer would say yes, if they need to know it and are bound by written confidentiality obligations (${C.permittedDisclosure.section}, with the definition in ${C.permittedRecipient.section}). ${C.contractors.section} may come along marked "overrides §4.2", but employees aren't contractors, so it mustn't turn the answer into a no. If it does, start Claude Code and ask it, as in Guided step 4, to make the override rule in \`prompts/generate.md\` apply only to the case the overriding clause covers.
+2. Now a question the NDA doesn't settle: \`uv run ask.py "Can we share this with a freelance consultant who works in our office?"\`. Ask Claude Code to add a third rule to \`prompts/generate.md\`: when the NDA doesn't settle whether someone fits a defined term or an overriding clause, show both clauses, say plainly that the NDA leaves it open, and suggest asking a lawyer. Run the question again and check it does.
+3. Run the subcontractor question once more (Guided step 6) to make sure it's still right, then save and push your work as in Guided step 8.
+:::
+
+:::tier solo
+Make the old muddled answer impossible to ship. Add the extra check from this module's lesson to your Module 9 answer gates: before an answer is shown, block it if it offers a route through a clause that another retrieved clause overrides, such as "yes under ${C.permittedDisclosure.section}" while ${C.contractors.section} is in view. Write a test, the same way as your Module 9 tests, that feeds the gate the old two-route answer and checks it's blocked. Add the two lawyer's rules from Guided step 4 to the judge prompt your \`evaluate.py\` uses, re-run the evaluation as in Guided step 7, then commit and push.
+:::
+
+**Files you create:** \`legal.py\`, your parser and citation objects; \`config/taxonomy.yaml\`, the plain list of override words the parser reads; a rebuilt \`index/\` whose chunks carry their "uses" and "overrides" labels; two new rules in \`prompts/generate.md\`; and fresh \`eval/answers.json\` and \`eval/metrics.json\` from your golden set.
+
+**Capstone branch:** save this work on a branch called \`legal-domain\` in your course project. It needs the parser, the defined-term and override rules, the conflicting route to your strongest model and the citation objects, and the subcontractor answer must be the correct one: not without the Disclosing Party's prior written consent.
+
+**Check it with your assistant:** ask your coding assistant, "Does my legal-domain branch parse data/nda.md into whole clauses, read its override words from config/taxonomy.yaml, spell out defined terms, put §4.5 first marked as overriding §4.2, tag that question conflicting, and return citation objects whose quotes are checked word for word?"`,
     },
     {
       id: "m10-s07",
@@ -334,7 +490,9 @@ conflicting: strongest-model`,
     "precedence", "override-word", "cross-reference",
     "domain-knowledge", "domain-pack", "taxonomy", "rag", "llm", "llm-as-judge", "prompt", "prompt-file", "settings-file",
     "routing-tag", "pdf", "token", "chunk", "clause-aware-parsing", "metadata", "index", "embedding", "re-rank",
-    "citation", "citation-object", "golden-set", "branch",
+    "citation", "citation-object", "golden-set", "branch", "signature-block", "claude-models",
+    "eval", "eval-script", "recall-at-3", "citation-accuracy", "groundedness", "gate", "harness",
+    "terminal", "folder", "command", "claude-code", "commit", "push", "github",
   ],
 
   study_guide: [

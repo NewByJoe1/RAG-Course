@@ -1,5 +1,6 @@
 import type { ModuleContent } from "../types";
 import { cite, NDA_CLAUSES as C, RUNNING_QUESTION } from "../nda";
+import { md } from "../md";
 
 // Module 11, rewritten on the running example. Beta's legal team asks the
 // subcontractor question across their other NDAs, which word the rule as
@@ -121,7 +122,7 @@ The trick is in picking the wrong passage. Picture it on our NDA:
 2. **Find hard negatives.** For each question, search with the current model and take the top 5 passages that aren't the answer. Check none of them actually answers the question too, and have a lawyer spot-check a sample.
 3. **Train.** Start from a small, free embedding model such as bge-small, and train it for three passes over the pairs. Save the result in \`models/embedder-v2/\`.
 
-The pairs live in \`train/pairs.jsonl\`, a plain text file with one training example per line: the question, the right passage and a hard negative.`,
+The pairs live in \`train/embedder_pairs.jsonl\`, a plain text file with one training example per line: the question, the right passage and a hard negative.`,
       code_snippet: `import json
 from sentence_transformers import SentenceTransformer, InputExample, losses
 from torch.utils.data import DataLoader
@@ -130,7 +131,7 @@ from torch.utils.data import DataLoader
 model = SentenceTransformer("BAAI/bge-small-en-v1.5")
 
 # One line per example: question, right passage, hard negative.
-rows = [json.loads(line) for line in open("train/pairs.jsonl")]
+rows = [json.loads(line) for line in open("train/embedder_pairs.jsonl")]
 examples = [InputExample(texts=[r["question"], r["positive"], r["hard_negative"]]) for r in rows]
 
 loader = DataLoader(examples, shuffle=True, batch_size=32)
@@ -176,17 +177,178 @@ nda-acme-beta-001  ${C.contractors.section} rank 3 (was 9)  ${C.permittedDisclos
       order_index: 6,
       kind: "exercise",
       title: "Hands-on: try it yourself",
-      body_md: `**Predict first:** by meaning alone, ${C.contractors.section} ranks 9th for "${RUNNING_QUESTION}". After fine-tuning on legal text, where do you think it will land? Write your guess down before you start.
+      body_md: md`**Predict first:** in the lesson, meaning search alone ranks ${C.contractors.section} 9th for "${RUNNING_QUESTION}" until the embedding model learns legal language. Your project's golden set is much smaller than Beta's. After a short fine-tune on legal text, will recall@3 on it go up, stay the same, or go down? And where will ${C.contractors.section} land? Write both guesses down before you start.
 
-- **Guided:** Run the data-prep notebook. It downloads CUAD and ContractNLI and builds the training pairs. Open 10 hard negatives and say, for each one, why it's hard, the way ${C.compelledDisclosure.section} ${C.compelledDisclosure.title} is hard for the subcontractor question.
-- **Partial:** Change how hard negatives are picked: at random, the top 5 from search, or passages of the same kind of clause. Train once with each, and compare where ${C.contractors.section} lands for the subcontractor row and what recall@3 the golden set gets.
-- **Solo:** Fine-tune on CUAD only, then test on ACORD and on your golden set. Write 200 words on what carried over to Beta's NDAs and what didn't.
+:::tier guided
+:::step Open your project and make this module's branch
+**Where:** in your terminal (see Module 0 if you need a reminder of how to open it).
 
-**Files you create:** \`data/cuad/\` and \`data/contractnli/\`, the folders holding the downloaded datasets; an updated \`train/pairs.jsonl\`, your training examples, one per line; and \`models/embedder-v2/\`, the folder holding your new legal embedding model.
+**Do:** go into your project folder, then make a **branch** called \`legal-embeddings\` for this module. Module 10 left you on its \`legal-domain\` branch, so the new branch starts from everything you've built so far.
 
-**Capstone branch:** save this work on a branch called \`legal-embeddings\` in your course project. Put the new model behind a setting in \`config/models.yaml\` that picks the old or the new one, and save the results of both tests.
+~~~bash
+cd rag-course-project
+git switch -c legal-embeddings
+~~~
 
-**Check it with your assistant:** ask your coding assistant, "Does my legal-embeddings branch build train/pairs.jsonl from CUAD and ContractNLI with hard negatives, keep the golden set and ACORD out of training, re-index after training, and check the subcontractor row of eval/golden.jsonl with the new model?"`,
+**You should see:** \`Switched to a new branch 'legal-embeddings'\`.
+
+**If it didn't work:** if it says the branch already exists, you've started this before: run \`git switch legal-embeddings\` instead. To check you started from the right place, run \`git log --oneline -1\`: it should show your Module 10 commit. If it doesn't, run \`git switch legal-domain\`, then \`git switch -C legal-embeddings\`, which makes the branch again from there.
+:::
+
+:::step Measure where you start
+**Where:** in Claude Code. Start it from your project folder:
+
+~~~bash
+claude
+~~~
+
+**Do:** before changing the embedding model, you need a "before" number to compare against. Paste this and press Enter. It adds a setting that picks the embedding model, and a quick way to score meaning search on its own, without asking Claude anything.
+
+~~~prompt
+Before I change the embedding model, I want a "before" number.
+- In config/models.yaml, add a setting embedder: base. It picks the embedding model and its index together: base means the model we use now, BAAI/bge-small-en-v1.5, with the index in index/. Make rag.py read this setting.
+- Add an option to evaluate.py: uv run evaluate.py --meaning-only. It scores recall@3 on eval/golden.jsonl using meaning search alone: no keyword search, no re-ranking, and no extra clauses added by legal.py. It must not call Claude. It prints one line per golden-set question with the rank of each of its gold clauses, then recall@3, and saves the result to eval/meaning_only_<embedder>.json.
+Run it and show me the output.
+~~~
+
+Claude Code asks your permission before it changes a file or runs a command. Check it's what you expected and choose **Yes** each time.
+
+**You should see:** one line per question in your golden set (a handful), each saying where its gold clauses landed, then recall@3, a number between 0 and 1. It takes seconds, not minutes. Write down recall@3, and where ${C.contractors.section} lands for the subcontractor question: these are your "before" numbers.
+
+**If it didn't work:** if it says \`eval/golden.jsonl\` is missing, your branch didn't start from Module 10's work: check as in step 1. If it runs for minutes, it's probably asking Claude: tell Claude Code "--meaning-only must not call Claude. Please fix this."
+:::
+
+:::step Download a small slice of CUAD
+**Where:** in Claude Code, still in your project.
+
+**Do:** CUAD (Contract Understanding Atticus Dataset) is the collection of real contracts that lawyers labelled, from this module's lesson. A copy is shared on **Hugging Face**, a website where people share free datasets and AI (artificial intelligence) models, and the \`datasets\` **library** (ready-made code) downloads from it. You'll take just 200 clauses: enough to learn from, small enough for a laptop. Paste this and press Enter.
+
+~~~prompt
+Add the datasets library with uv, then write prepare_data.py:
+- Load the Hugging Face dataset "dvgodoy/CUAD_v1_Contract_Understanding_clause_classification". It has one lawyer-labelled clause per row: "clause" is the text and "label" says what kind of clause it is.
+- Keep 25 clauses of each of these 8 kinds: Anti-Assignment, Non-Transferable License, Change Of Control, Audit Rights, Exclusivity, Non-Compete, Insurance, Governing Law. Only keep clauses between 80 and 1,000 characters long. Pick them at random with a fixed seed of 42, so I get the same 200 every time.
+- Save them to data/cuad/slice.jsonl, one per line, with the text and its kind. Write data/cuad/SOURCE.md saying where they came from: CUAD v1 by The Atticus Project, shared under the CC BY 4.0 licence, via that Hugging Face copy.
+- Print how many clauses of each kind were kept, and the total.
+Run it and show me the output.
+~~~
+
+**You should see:** Claude Code adding the library (a minute or so), a small download of about 2 megabytes, then eight lines, one per kind, each with 25, and a total of 200. The file \`data/cuad/slice.jsonl\` now holds your slice. CUAD's licence lets you use it as long as you credit its makers, which is what \`SOURCE.md\` does.
+
+**If it didn't work:** if the download fails, check your internet connection and ask Claude Code to run \`prepare_data.py\` again. If it says the dataset can't be found, check the name in the prompt was pasted whole: it's long.
+:::
+
+:::step Build training pairs with hard negatives
+**Where:** in Claude Code.
+
+**Do:** each training example is three pieces of text: a question, the clause that answers it, and a **hard negative**, a clause that looks like the answer but isn't. Claude writes the questions (they're **synthetic questions**: made up by a model, not asked by real people), and search finds the hard negatives. Paste this and press Enter.
+
+~~~prompt
+Write make_pairs.py to turn data/cuad/slice.jsonl into training pairs:
+- Questions: for each clause, ask Claude for one question a non-lawyer might ask that this clause answers, in plain words, without copying more than four words in a row from the clause. Use claude -p --model haiku with 20 clauses per call, so it's about 10 calls. Drop any question that still copies five or more words in a row.
+- Hard negatives: embed all the clauses with the current model, BAAI/bge-small-en-v1.5. For each question, the hard negative is the highest-scoring clause of a different kind.
+- Save train/embedder_pairs.jsonl, one pair per line, with: question, positive (its own clause), hard_negative and kind. Don't touch train/pairs.jsonl, which trains the re-ranker. Never use data/nda.md or eval/golden.jsonl here: they're what we test on.
+- Print how many pairs were saved, and 3 examples.
+Run it and show me the output.
+~~~
+
+**You should see:** a few minutes of calls to Claude, then about 200 pairs saved (a few fewer if some questions were dropped), and three examples. Read them. Each hard negative should be about something close to the question, such as consent, handing rights to someone else, or another company, without answering it. That's what makes it hard, just as ${C.compelledDisclosure.section} ${C.compelledDisclosure.title} is hard for the subcontractor question.
+
+**If it didn't work:** if Claude Code stops the run because it's taking a while, leave Claude Code (type \`/exit\`), run \`uv run make_pairs.py\` yourself in the terminal, then start \`claude\` again. If it says it can't run Claude, check that \`claude -p "hello"\` answers in your terminal.
+:::
+
+:::video m11-cuad-pairs
+:::
+
+:::step Fine-tune the embedding model
+**Where:** in Claude Code.
+
+**Do:** now the training itself. The model sees each question, its clause and its hard negative, and its numbers are nudged so the question moves closer to its clause and further from the hard negative. A few passes over 200 pairs is enough to see what happens. Paste this and press Enter.
+
+~~~prompt
+Write train_embedder.py to fine-tune the embedding model on train/embedder_pairs.jsonl with the sentence-transformers library (add it with uv if it isn't in the project yet):
+- Start from BAAI/bge-small-en-v1.5. Set aside 20 random pairs (seed 42) as a held-out set and train on the rest.
+- Use MultipleNegativesRankingLoss on (question, positive, hard_negative), 3 epochs, batch size 16. It must finish in a few minutes on a laptop.
+- Before and after training, print how often, on the held-out pairs, the question scores closer to its positive than to its hard negative.
+- Save the result to models/embedder-v2/ in float16, so its biggest file stays under GitHub's 100 MB limit.
+Run it and show me the output.
+~~~
+
+**You should see:** if sentence-transformers wasn't in your project yet, a large download first (it brings PyTorch, up to a couple of gigabytes, so it can take ten minutes). Then a progress bar for a few minutes, three passes (**epochs**) over the pairs, and two held-out scores between 0 and 1, before and after, such as 0.80 and then 0.90. After should be the same as before or higher. A new folder, \`models/embedder-v2/\`, holds your fine-tuned model.
+
+**If it didn't work:** if your computer runs out of memory, or training takes more than 15 minutes, tell Claude Code "Make training lighter: batch size 8 and 1 epoch." If Claude Code stops the run because it's taking a while, run \`uv run train_embedder.py\` yourself in the terminal, as in step 4.
+:::
+
+:::step Re-index and measure again
+**Where:** in Claude Code.
+
+**Do:** the new model gives every piece of text new numbers, so your old index can't be searched with it. You **re-index**: embed every clause again with the new model, into a separate folder, so old and new numbers never mix. Paste this and press Enter.
+
+~~~prompt
+Re-index with the new model and put it behind the embedder setting:
+- Build a second index in index-legal/ from parse_clauses() in legal.py, embedding every clause with models/embedder-v2 (load it with sentence-transformers). Leave index/ as it is.
+- In config/models.yaml, embedder: legal means models/embedder-v2 with index-legal/, and embedder: base stays as it was. rag.py must embed the question with the same model as the index it searches.
+- Set embedder: legal and run: uv run evaluate.py --meaning-only
+- Then show me a small table comparing eval/meaning_only_base.json and eval/meaning_only_legal.json: recall@3, and the rank of §4.5 for the subcontractor question.
+~~~
+
+**You should see:** \`index-legal/\` being built in a few seconds (the NDA is short), the same kind of output as in step 2, then a table with two columns, base and legal. Compare it with your "before" numbers and your guess from the start. Whatever it shows is a real result: with a golden set this small, recall@3 may go up, stay the same, or even slip a little.
+
+**If it didn't work:** if recall@3 for legal is close to 0, the question and the index are probably using different models. Tell Claude Code: "Check that rag.py embeds the question with the same model as the index it searches."
+:::
+
+:::video m11-before-after
+:::
+
+:::step Decide, then check the answer
+**Where:** in Claude Code.
+
+**Do:** the rule from this module's lesson: switch to the new model only if it does better on your test. Paste this and press Enter.
+
+~~~prompt
+Compare recall@3 for base and legal. If legal is higher, keep embedder: legal in config/models.yaml. If it's the same or lower, set it back to embedder: base and add a comment there saying why. Tell me which you chose.
+Then run uv run evaluate.py (the full evaluation, not --meaning-only) so eval/metrics.json and eval/answers.json match the setting, and run: uv run ask.py "Can we share this with a subcontractor?"
+~~~
+
+**You should see:** Claude Code saying which setting it kept and why, the full evaluation's scores after a few minutes, then the subcontractor answer. It's still Module 10's: not without the Disclosing Party's prior written consent (${C.contractors.section}), with ✓ citations. Fine-tuning changes how clauses are found, not how the answer is reasoned.
+
+**If it didn't work:** if the answer changed, look at the clauses it lists. If ${C.contractors.section} is missing, ask Claude Code: "Which embedding model and which index does ask.py use right now?"
+:::
+
+:::step Save your work and send it to GitHub
+**Where:** in your terminal, inside \`rag-course-project\`. Leave Claude Code first: type \`/exit\` and press Enter.
+
+**Do:** run these three lines one at a time. The first picks up every new and changed file, the second **commits** them (saves a snapshot with a note), and the third **pushes** the branch to GitHub, so it's backed up.
+
+~~~bash
+git add -A
+git commit -m "Module 11: legal embedding model, re-indexed and measured"
+git push -u origin legal-embeddings
+~~~
+
+**You should see:** after the commit, a line like \`[legal-embeddings 1a2b3c4] Module 11: legal embedding model, re-indexed and measured\`. The push takes longer than usual, because it uploads your model (about 65 megabytes). GitHub may warn that a file is larger than its recommended 50 megabytes: that's fine, it still takes it. Last comes a line saying the branch \`legal-embeddings\` is set up to track \`origin/legal-embeddings\`.
+
+**If it didn't work:** if the push is refused because a file is over 100 megabytes, the model wasn't saved in the smaller format. Start \`claude\`, ask "Save models/embedder-v2 in float16 so no file is over 100 megabytes", leave Claude Code, then run \`git add -A\`, \`git commit --amend --no-edit\` (which replaces your last snapshot) and the push again. If the push asks for a username or password, run \`gh auth login\` (Module 0, Part 3) and push again.
+:::
+:::
+
+:::tier partial
+Change how the hard negatives are picked, and see what it does.
+
+1. Start Claude Code, as in Guided step 2, and ask it to give \`make_pairs.py\` (Guided step 4) a choice of three ways to pick each hard negative: a random clause of a different kind, the highest-scoring clause of a different kind (what you have now), or the highest-scoring clause of the same kind.
+2. For each way, rebuild the pairs, train (Guided step 5), re-index and run \`uv run evaluate.py --meaning-only\` (Guided step 6). Ask Claude Code to collect the three results in one table: held-out score, recall@3, and where ${C.contractors.section} lands.
+3. Open five same-kind hard negatives. Do any of them actually answer the question? If so, the model was taught that a right answer is wrong: that's the risk with picking negatives that are too close.
+4. Keep the best model in \`models/embedder-v2/\`, decide the setting with the rule from Guided step 7, then save and push as in Guided step 8.
+:::
+
+:::tier solo
+Test the new model on real NDAs it never trained on. ContractNLI's "sharing with third parties" question is copied on Hugging Face as \`mteb/ContractNLISharingWithThirdPartiesLegalBenchClassification\`: short passages from real NDAs, each labelled 1 if it lets the Receiving Party share with third parties such as consultants or agents. Load it with the \`datasets\` library from Guided step 3, never train on it, and for both settings (base and legal) rank every passage for "Can we share confidential information with our consultants or agents?". Count how many of the top 10 are labelled 1. Then write about 200 words in \`eval/embedder-report.md\`: what carried over from CUAD to NDAs and what didn't, and whether it changes the choice you made in Guided step 7. Commit and push.
+:::
+
+**Files you create:** \`data/cuad/slice.jsonl\` and \`data/cuad/SOURCE.md\`, your 200 CUAD clauses and where they came from; \`train/embedder_pairs.jsonl\`, your training examples with hard negatives, one per line; \`models/embedder-v2/\`, the folder holding your fine-tuned embedding model; \`index-legal/\`, the index built with it; the \`embedder\` setting in \`config/models.yaml\`; and \`eval/meaning_only_base.json\` and \`eval/meaning_only_legal.json\`, your before and after results.
+
+**Capstone branch:** save this work on a branch called \`legal-embeddings\` in your course project. Put the new model behind the \`embedder\` setting in \`config/models.yaml\`, which picks the base or the legal model together with its own index, and keep the before and after recall@3 results.
+
+**Check it with your assistant:** ask your coding assistant, "Does my legal-embeddings branch build train/embedder_pairs.jsonl from a slice of CUAD with hard negatives, keep data/nda.md and eval/golden.jsonl out of training, embed every question with the same model as the index it searches, and compare recall@3 on eval/golden.jsonl before and after fine-tuning?"`,
     },
     {
       id: "m11-s07",
@@ -229,7 +391,7 @@ nda-acme-beta-001  ${C.contractors.section} rank 3 (was 9)  ${C.permittedDisclos
       order_index: 3,
       title: "Build training pairs",
       body_md: `From CUAD, a large language model writes about 2,000 questions like the subcontractor one, in plain words. For each, the right passage is the one lawyers highlighted, and the hard negative is a near-miss that search confused it with. The subcontractor question itself stays out: it's a golden-set row, and you never train on your test.`,
-      code_snippet: `# train/pairs.jsonl (one example per line; the passages come from CUAD)
+      code_snippet: `# train/embedder_pairs.jsonl (one example per line; the passages come from CUAD)
 {"question": "Can we hand these files to an outside firm?",
  "positive": "<CUAD passage limiting disclosure to outside parties>",
  "hard_negative": "<CUAD passage about disclosure ordered by a court>"}`,
@@ -285,7 +447,9 @@ In Beta's other NDAs, the "service providers" rule now comes back in the top 3. 
     "embedding", "vector", "index", "re-index", "hybrid-search", "keyword-search", "synonym-table", "re-rank",
     "fine-tuning", "contrastive-fine-tuning", "base-model", "dataset", "cuad", "contractnli", "acord", "benchmark",
     "training-pair", "hard-negative", "synthetic-question", "held-out-set", "language-model", "llm", "prompt",
-    "golden-set", "recall-at-3", "eval-script", "settings-file", "domain-pack", "notebook", "branch",
+    "golden-set", "recall-at-3", "eval-script", "settings-file", "domain-pack", "notebook", "branch", "folder", "push",
+    "terminal", "command", "claude-code", "commit", "github", "library", "ai", "hugging-face", "sentence-transformers", "pytorch",
+    "epoch", "eval", "gold-clause", "citation",
   ],
 
   study_guide: [
